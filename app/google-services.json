@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "642342521698",
+    "project_id": "dmsdatabase-aceb4",
+    "storage_bucket": "dmsdatabase-aceb4.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:642342521698:android:4d0fffda06274a0aec7a3b",
+        "android_client_info": {
+          "package_name": "com.example.dmsapplication"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "642342521698-54jmkmmo9ab496baok8dc58bcgc54onc.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.dmsapplication",
+            "certificate_hash": "9895d667793f38e48603b6710b4858d2cb17682d"
+          }
+        },
+        {
+          "client_id": "642342521698-7du95gd7ag5bp260gqfb2r4o543iijk9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFuQEJtoOwsvWaF40j6e2pdGyvxqejd3A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "642342521698-7du95gd7ag5bp260gqfb2r4o543iijk9.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

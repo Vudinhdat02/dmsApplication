@@ -1,0 +1,401 @@
+package com.example.dmsapplication.ui.homeView
+
+import android.Manifest
+import android.graphics.Color
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.widget.SwitchCompat
+import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.Preview
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.fragment.app.Fragment
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
+import com.example.dmsapplication.R
+import com.example.dmsapplication.data.model.DriverStats
+import com.example.dmsapplication.data.repository.StatsRepository
+import com.example.dmsapplication.ml.analyzer.DmsAnalyzer
+import com.example.dmsapplication.ml.math.CalibrationManager
+import com.example.dmsapplication.ml.math.HeadPoseEstimator
+import com.example.dmsapplication.ui.homeView.helper.AlarmHelper
+import com.example.dmsapplication.ui.homeView.helper.CalibrationDialog
+import com.example.dmsapplication.ui.homeView.helper.LocationHelper
+import com.example.dmsapplication.ui.homeView.helper.OverlayView
+import com.example.dmsapplication.utils.CrashDetector
+import com.example.dmsapplication.worker.SyncWorker
+import com.google.firebase.auth.FirebaseAuth
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
+import java.util.concurrent.Executors
+
+class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
+
+    private val viewModel: HomeViewModel by viewModels { HomeViewModelFactory() }
+    private var faceLandmarker: FaceLandmarker? = null
+    private var dmsAnalyzer: DmsAnalyzer? = null
+    private val cameraExecutor = Executors.newSingleThreadExecutor()
+    private lateinit var alarmHelper: AlarmHelper
+    private lateinit var locationHelper: LocationHelper
+    private lateinit var calibrationManager: CalibrationManager
+    private lateinit var crashDetector: CrashDetector
+    private lateinit var overlayView: OverlayView
+    private lateinit var cameraBorder: CardView
+    private lateinit var viewFinder: PreviewView
+    private lateinit var tvStatus: TextView
+    private lateinit var tvSpeed: TextView
+    private lateinit var tvDate: TextView
+    private lateinit var tvTime: TextView
+    private lateinit var tvDrowsyCount: TextView
+    private lateinit var tvHeadCount: TextView
+    private lateinit var tvYawnCount: TextView
+
+    @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
+    private var isVectorEnabled = false
+    private val handler = Handler(Looper.getMainLooper())
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        val view = inflater.inflate(R.layout.fragment_home, container, false)
+
+        calibrationManager = CalibrationManager(requireContext())
+        initViews(view)
+
+        ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
+            v.setPadding(0, 0, 0, 0)
+            insets
+        }
+
+        alarmHelper    = AlarmHelper(requireContext())
+        locationHelper = LocationHelper(requireContext()) { speed, status ->
+            viewModel.updateLocation(speed, status)
+        }
+
+        crashDetector = CrashDetector(requireContext()) {
+            Toast.makeText(requireContext(), "PHÁT HIỆN VA CHẠM! Đang gửi cảnh báo...", Toast.LENGTH_LONG).show()
+
+            val lat = locationHelper.currentLocation?.latitude ?: 0.0
+            val lon = locationHelper.currentLocation?.longitude ?: 0.0
+
+            viewModel.triggerCrashAlert(lat, lon)
+        }
+
+        setupFaceLandmarker()
+        requestPermissionsLauncher.launch(
+            arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION)
+        )
+        startClockUpdates()
+        observeViewModel()
+
+        if (!calibrationManager.isCalibrated) {
+            view.post { showCalibrationDialog() }
+        } else {
+            viewModel.setCalibrated(true)
+        }
+
+        viewModel.setGpsEnabled(true)
+
+        return view
+    }
+
+    private fun initViews(view: View) {
+        tvStatus      = view.findViewById(R.id.tvStatus)
+        tvSpeed       = view.findViewById(R.id.tvSpeed)
+        tvDate        = view.findViewById(R.id.tvDate)
+        tvTime        = view.findViewById(R.id.tvTime)
+        tvDrowsyCount = view.findViewById(R.id.tvDrowsyCount)
+        tvHeadCount   = view.findViewById(R.id.tvHeadCount)
+        tvYawnCount   = view.findViewById(R.id.tvYawnCount)
+        viewFinder    = view.findViewById(R.id.viewFinder)
+        overlayView   = view.findViewById(R.id.overlayView)
+        cameraBorder  = view.findViewById(R.id.cameraBorder)
+
+        cameraBorder.setCardBackgroundColor(Color.GREEN)
+        viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
+
+        view.findViewById<SwitchCompat>(R.id.switchSunglasses)
+            .setOnCheckedChangeListener { _, isChecked ->
+                viewModel.setSunglassesMode(isChecked)
+            }
+
+        view.findViewById<SwitchCompat>(R.id.switchYawn)
+            .setOnCheckedChangeListener { _, isChecked ->
+                viewModel.setYawnMode(isChecked)
+            }
+
+        view.findViewById<SwitchCompat>(R.id.switchVectorHome)
+            .setOnCheckedChangeListener { _, isChecked ->
+                isVectorEnabled = isChecked
+                if (!isChecked) overlayView.setResults(null)
+            }
+
+        view.findViewById<SwitchCompat>(R.id.switchGpsHome)
+            .setOnCheckedChangeListener { _, isChecked ->
+                viewModel.setGpsEnabled(isChecked)
+            }
+
+        view.findViewById<View>(R.id.btnRecalibrate).setOnClickListener {
+            showCalibrationDialog()
+        }
+    }
+
+    private fun observeViewModel() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isDrowsy.collect { updateBorderAndAlarm() }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isHeadDistracted.collect { updateBorderAndAlarm() }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.drowsyCount.collect { count ->
+                tvDrowsyCount.text = "Số lần nhắm mắt: $count"
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.headDistractedCount.collect { count ->
+                tvHeadCount.text = "Số lần quay đầu: $count"
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.yawnCount.collect { count ->
+                tvYawnCount.text = "Số lần ngáp: $count"
+            }
+        }
+
+        // Lắng nghe sự kiện phát âm thanh khuyên nghỉ ngơi
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.suggestRest.collect { shouldRest ->
+                if (shouldRest) {
+                    Toast.makeText(requireContext(), "Bạn đang rất mệt, hãy dừng xe nghỉ ngơi!", Toast.LENGTH_LONG).show()
+                    // GỌI HÀM PHÁT ÂM THANH MỚI TRONG ALARM HELPER
+                    alarmHelper.playRestAlert()
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.speed.collect { speed -> tvSpeed.text = speed }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.locationStatus.collect { status -> tvStatus.text = status }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isGpsEnabled.collect { enabled ->
+                if (enabled) locationHelper.startTracking()
+                else locationHelper.stopTracking()
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isMonitoringEnabled.collect { monitoring ->
+                if (!monitoring && !viewModel.isDrowsy.value && !viewModel.isHeadDistracted.value) {
+                    cameraBorder.setCardBackgroundColor(
+                        if (monitoring) Color.GREEN else Color.GRAY
+                    )
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isSunglassesMode.collect { isSunglasses ->
+                dmsAnalyzer?.isSunglassesMode = isSunglasses
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isYawnMode.collect { isYawn ->
+                dmsAnalyzer?.isYawnMode = isYawn
+            }
+        }
+    }
+
+    private fun updateBorderAndAlarm() {
+        val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+        cameraBorder.setCardBackgroundColor(if (isAlert) Color.RED else Color.GREEN)
+        if (isAlert) alarmHelper.playAlert() else alarmHelper.stopAlert()
+    }
+
+    private fun showCalibrationDialog() {
+        val dialog = CalibrationDialog()
+        dialog.setCalibrationListener(this)
+        dialog.show(childFragmentManager, "calibration")
+    }
+
+    override fun onCalibrationComplete() {
+        val angles = latestHeadAngles
+        if (angles != null) {
+            calibrationManager.saveBaseline(angles)
+            viewModel.setCalibrated(true)
+            viewModel.resetStats()
+            dmsAnalyzer?.resetAll()
+            Toast.makeText(requireContext(), "Đã lưu hướng lái chuẩn!", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(requireContext(), "Không phát hiện khuôn mặt. Hãy thử lại!", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onCalibrationCancelled() { }
+
+    private fun setupFaceLandmarker() {
+        try {
+            val baseOptions = BaseOptions.builder()
+                .setModelAssetPath("face_landmarker.task")
+                .build()
+            val options = FaceLandmarker.FaceLandmarkerOptions.builder()
+                .setBaseOptions(baseOptions)
+                .setRunningMode(RunningMode.VIDEO)
+                .setNumFaces(1)
+                .setMinFaceDetectionConfidence(0.5f)
+                .setMinFacePresenceConfidence(0.5f)
+                .setMinTrackingConfidence(0.5f)
+                .build()
+            faceLandmarker = FaceLandmarker.createFromOptions(requireContext(), options)
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Lỗi AI: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val requestPermissionsLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            if (permissions[Manifest.permission.CAMERA] == true) startCamera()
+            if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
+                if (viewModel.isGpsEnabled.value) locationHelper.startTracking()
+            }
+        }
+
+    private fun startClockUpdates() {
+        handler.post(object : Runnable {
+            override fun run() {
+                val now = Calendar.getInstance().time
+                tvDate.text = "Ngày: ${SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now)}"
+                tvTime.text = "Giờ: ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)}"
+                handler.postDelayed(this, 1000)
+            }
+        })
+    }
+
+    private fun startCamera() {
+        val fl = faceLandmarker ?: return
+
+        val analyzer = DmsAnalyzer(
+            faceLandmarker     = fl,
+            calibrationManager = calibrationManager,
+            onResults = { isDrowsy, isHeadDistracted, isYawning, result ->
+                result?.faceLandmarks()?.firstOrNull()?.let { lm ->
+                    latestHeadAngles = HeadPoseEstimator.estimate(lm)
+                }
+
+                activity?.runOnUiThread {
+                    val wasAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+
+                    // Gọi hàm onDmsResult đã được cập nhật thêm isYawning
+                    viewModel.onDmsResult(isDrowsy, isHeadDistracted, isYawning)
+
+                    val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+
+                    if (!wasAlert && isAlert) {
+                        captureAndSave()
+                    }
+
+                    if (isVectorEnabled) {
+                        overlayView.setResults(result)
+                    }
+                }
+            }
+        )
+
+        analyzer.isSunglassesMode = viewModel.isSunglassesMode.value
+        analyzer.isYawnMode = viewModel.isYawnMode.value
+        dmsAnalyzer = analyzer
+
+        crashDetector.startListening()
+
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(viewFinder.surfaceProvider)
+            }
+
+            val imageAnalysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetRotation(viewFinder.display.rotation)
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
+                .build()
+                .also { it.setAnalyzer(cameraExecutor, analyzer) }
+
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(
+                viewLifecycleOwner,
+                CameraSelector.DEFAULT_FRONT_CAMERA,
+                preview,
+                imageAnalysis
+            )
+        }, ContextCompat.getMainExecutor(requireContext()))
+    }
+
+    private fun captureAndSave() {
+        val bitmap = viewFinder.bitmap ?: return
+        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+
+        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
+            val repository = StatsRepository(requireContext())
+
+            val fileName  = "alert_${System.currentTimeMillis()}"
+            val imagePath = repository.saveImageLocally(bitmap, fileName)
+
+            val stats = DriverStats(
+                userId              = userId,
+                timestamp           = System.currentTimeMillis(),
+                drowsyCount         = viewModel.drowsyCount.value,
+                headDistractedCount = viewModel.headDistractedCount.value,
+                speed               = viewModel.speed.value
+                    .replace("Tốc độ: ", "")
+                    .replace(" km/h", "")
+                    .toFloatOrNull() ?: 0f,
+                localImagePath      = imagePath,
+                isSynced            = false
+            )
+            repository.saveStats(stats)
+
+            SyncWorker.scheduleImmediate(requireContext())
+        }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        handler.removeCallbacksAndMessages(null)
+        cameraExecutor.shutdown()
+        faceLandmarker?.close()
+        alarmHelper.release()
+        locationHelper.stopTracking()
+        crashDetector.stopListening()
+    }
+}
