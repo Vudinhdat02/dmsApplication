@@ -9,6 +9,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.fragment.app.Fragment
 import com.example.dmsapplication.R
+import com.example.dmsapplication.ui.dashboardView.DashboardFragment
 import com.example.dmsapplication.ui.historyView.HistoryFragment
 import com.example.dmsapplication.ui.homeView.HomeFragment
 import com.example.dmsapplication.ui.settingView.SettingFragment
@@ -39,10 +40,12 @@ class HomeActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.nav_home -> { replaceFragment(HomeFragment()); true }
                 R.id.nav_history -> { replaceFragment(HistoryFragment()); true }
+                R.id.nav_dashboard -> { replaceFragment(DashboardFragment()); true }
                 R.id.nav_settings -> { replaceFragment(SettingFragment()); true }
                 else -> true
             }
         }
+
         // Khởi động WorkManager định kỳ để dọn ảnh cũ
         com.example.dmsapplication.worker.SyncWorker.schedulePeriodic(this)
     }

@@ -35,7 +35,9 @@ android {
             properties.load(FileInputStream(localPropertiesFile))
         }
 
+        // Đọc các API Key từ file local.properties và đưa vào BuildConfig
         buildConfigField("String", "BREVO_API_KEY", "\"${properties.getProperty("BREVO_API_KEY")}\"")
+        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"") // ĐÃ THÊM DÒNG NÀY
     }
 
     buildTypes {
@@ -113,6 +115,9 @@ dependencies {
     implementation(libs.androidx.annotation)
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation("androidx.fragment:fragment-ktx:1.6.2")
+
+    // Thư viện Google Gemini AI
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // TESTING
     testImplementation(libs.junit)

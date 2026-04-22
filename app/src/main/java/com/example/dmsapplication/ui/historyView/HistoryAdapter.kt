@@ -19,11 +19,11 @@ class HistoryAdapter : ListAdapter<DriverStats, HistoryAdapter.ViewHolder>(DiffC
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val imgSnapshot: ImageView = view.findViewById(R.id.imgSnapshot)
-        val tvDateTime: TextView   = view.findViewById(R.id.tvDateTime)
-        val tvDrowsy: TextView     = view.findViewById(R.id.tvDrowsyCount)
-        val tvHead: TextView       = view.findViewById(R.id.tvHeadCount)
-        val tvSpeed: TextView      = view.findViewById(R.id.tvSpeed)
-        val tvSynced: TextView     = view.findViewById(R.id.tvSyncStatus)
+        val tvDateTime: TextView = view.findViewById(R.id.tvDateTime)
+        val tvDrowsy: TextView = view.findViewById(R.id.tvDrowsyCount)
+        val tvHead: TextView = view.findViewById(R.id.tvHeadCount)
+        val tvSpeed: TextView = view.findViewById(R.id.tvSpeed)
+        val tvSynced: TextView = view.findViewById(R.id.tvSyncStatus)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
