@@ -35,7 +35,6 @@ class HistoryAdapter : ListAdapter<DriverStats, HistoryAdapter.ViewHolder>(DiffC
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = getItem(position)
 
-        // Hiển thị ảnh — ưu tiên cloud URL, fallback local
         val imageSource: Any = when {
             item.cloudImageUrl.isNotEmpty() -> item.cloudImageUrl
             item.localImagePath.isNotEmpty() -> File(item.localImagePath)
@@ -55,7 +54,7 @@ class HistoryAdapter : ListAdapter<DriverStats, HistoryAdapter.ViewHolder>(DiffC
         // Thống kê
         holder.tvDrowsy.text = "Nhắm mắt: ${item.drowsyCount} lần"
         holder.tvHead.text   = "Quay đầu: ${item.headDistractedCount} lần"
-        holder.tvSpeed.text  = "Tốc độ: ${"%.1f".format(item.speed)} km/h"
+        holder.tvSpeed.text  = "Tốc độ lúc vi phạm: ${"%.1f".format(item.speed)} km/h"
 
         // Trạng thái sync
         holder.tvSynced.text = if (item.isSynced) "Đã lưu cloud" else "Chưa đồng bộ"

@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,6 +22,7 @@ import androidx.cardview.widget.CardView
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.dmsapplication.R
@@ -48,7 +50,7 @@ import java.util.concurrent.Executors
 
 class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
-    private val viewModel: HomeViewModel by viewModels { HomeViewModelFactory() }
+    private val viewModel: HomeViewModel by activityViewModels { HomeViewModelFactory() }
     private var faceLandmarker: FaceLandmarker? = null
     private var dmsAnalyzer: DmsAnalyzer? = null
     private val cameraExecutor = Executors.newSingleThreadExecutor()
@@ -60,13 +62,11 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var cameraBorder: CardView
     private lateinit var viewFinder: PreviewView
     private lateinit var tvStatus: TextView
-    private lateinit var tvSpeed: TextView
-    private lateinit var tvDate: TextView
-    private lateinit var tvTime: TextView
+    private lateinit var tvSpeedNumber: TextView
+    private lateinit var pbSpeed: android.widget.ProgressBar
     private lateinit var tvDrowsyCount: TextView
     private lateinit var tvHeadCount: TextView
     private lateinit var tvYawnCount: TextView
-
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
     private var isVectorEnabled = false
     private val handler = Handler(Looper.getMainLooper())
@@ -104,7 +104,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         requestPermissionsLauncher.launch(
             arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION)
         )
-        startClockUpdates()
         observeViewModel()
 
         if (!calibrationManager.isCalibrated) {
@@ -120,16 +119,14 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
     private fun initViews(view: View) {
         tvStatus      = view.findViewById(R.id.tvStatus)
-        tvSpeed       = view.findViewById(R.id.tvSpeed)
-        tvDate        = view.findViewById(R.id.tvDate)
-        tvTime        = view.findViewById(R.id.tvTime)
         tvDrowsyCount = view.findViewById(R.id.tvDrowsyCount)
         tvHeadCount   = view.findViewById(R.id.tvHeadCount)
         tvYawnCount   = view.findViewById(R.id.tvYawnCount)
         viewFinder    = view.findViewById(R.id.viewFinder)
         overlayView   = view.findViewById(R.id.overlayView)
         cameraBorder  = view.findViewById(R.id.cameraBorder)
-
+        tvSpeedNumber = view.findViewById(R.id.tvSpeedNumber)
+        pbSpeed       = view.findViewById(R.id.pbSpeed)
         cameraBorder.setCardBackgroundColor(Color.GREEN)
         viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
 
@@ -157,6 +154,24 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         view.findViewById<View>(R.id.btnRecalibrate).setOnClickListener {
             showCalibrationDialog()
         }
+
+        view.findViewById<SwitchCompat>(R.id.switchCameraPreview)
+            .setOnCheckedChangeListener { _, isChecked ->
+                viewModel.setCameraPreviewEnabled(isChecked)
+            }
+
+        view.findViewById<SwitchCompat>(R.id.switchVectorHome)
+            .setOnCheckedChangeListener { _, isChecked ->
+                isVectorEnabled = isChecked
+
+                // Cập nhật hiển thị ngay lập tức
+                if (isChecked && viewModel.isCameraPreviewEnabled.value) {
+                    overlayView.visibility = View.VISIBLE
+                } else {
+                    overlayView.visibility = View.GONE
+                    overlayView.setResults(null)
+                }
+            }
     }
 
     private fun observeViewModel() {
@@ -170,23 +185,22 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.drowsyCount.collect { count ->
-                tvDrowsyCount.text = "Số lần nhắm mắt: $count"
+                tvDrowsyCount.text = "Mắt: $count"
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.headDistractedCount.collect { count ->
-                tvHeadCount.text = "Số lần quay đầu: $count"
+                tvHeadCount.text = "Đầu: $count"
             }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.yawnCount.collect { count ->
-                tvYawnCount.text = "Số lần ngáp: $count"
+                tvYawnCount.text = "Ngáp: $count"
             }
         }
 
-        // Lắng nghe sự kiện phát âm thanh khuyên nghỉ ngơi
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.suggestRest.collect { shouldRest ->
                 if (shouldRest) {
@@ -198,7 +212,25 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.speed.collect { speed -> tvSpeed.text = speed }
+            viewModel.speed.collect { speedStr ->
+                val speedVal = speedStr
+                    .replace("Tốc độ: ", "")
+                    .replace(" km/h", "")
+                    .trim()
+                    .toFloatOrNull() ?: 0f
+
+                val displaySpeed = speedVal.toInt()
+
+                tvSpeedNumber.text = displaySpeed.toString()
+
+                val progressVal = displaySpeed.coerceIn(0, 120)
+
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    pbSpeed.setProgress(progressVal, true)
+                } else {
+                    pbSpeed.progress = progressVal
+                }
+            }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -231,6 +263,20 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isYawnMode.collect { isYawn ->
                 dmsAnalyzer?.isYawnMode = isYawn
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isCameraPreviewEnabled.collect { isEnabled ->
+                if (isEnabled) {
+                    viewFinder.visibility = View.VISIBLE
+                    overlayView.visibility = if (isVectorEnabled) View.VISIBLE else View.GONE
+                    updateBorderAndAlarm()
+                } else {
+                    viewFinder.visibility = View.INVISIBLE
+                    overlayView.visibility = View.GONE
+                    cameraBorder.setCardBackgroundColor(Color.BLACK)
+                }
             }
         }
     }
@@ -288,17 +334,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 if (viewModel.isGpsEnabled.value) locationHelper.startTracking()
             }
         }
-
-    private fun startClockUpdates() {
-        handler.post(object : Runnable {
-            override fun run() {
-                val now = Calendar.getInstance().time
-                tvDate.text = "Ngày: ${SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(now)}"
-                tvTime.text = "Giờ: ${SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(now)}"
-                handler.postDelayed(this, 1000)
-            }
-        })
-    }
 
     private fun startCamera() {
         val fl = faceLandmarker ?: return
@@ -399,3 +434,4 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         crashDetector.stopListening()
     }
 }
+

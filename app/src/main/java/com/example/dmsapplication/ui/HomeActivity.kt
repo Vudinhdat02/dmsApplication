@@ -16,6 +16,11 @@ import com.example.dmsapplication.ui.settingView.SettingFragment
 import com.google.android.material.bottomnavigation.BottomNavigationView
 
 class HomeActivity : AppCompatActivity() {
+    private val homeFragment = HomeFragment()
+    private val historyFragment = HistoryFragment()
+    private val dashboardFragment = DashboardFragment()
+    private val settingFragment = SettingFragment()
+    private var activeFragment: Fragment = homeFragment
 
     @SuppressLint("MissingInflatedId")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,26 +38,46 @@ class HomeActivity : AppCompatActivity() {
         val bottomNav = findViewById<BottomNavigationView>(R.id.bottom_navigation)
 
         if (savedInstanceState == null) {
-            replaceFragment(HomeFragment())
+            supportFragmentManager.beginTransaction().apply {
+                add(R.id.fragment_container, settingFragment, "settings").hide(settingFragment)
+                add(R.id.fragment_container, dashboardFragment, "dashboard").hide(dashboardFragment)
+                add(R.id.fragment_container, historyFragment, "history").hide(historyFragment)
+                add(R.id.fragment_container, homeFragment, "home") // Fragment này sẽ hiển thị đầu tiên
+            }.commit()
         }
 
         bottomNav.setOnItemSelectedListener { item ->
             when (item.itemId) {
-                R.id.nav_home -> { replaceFragment(HomeFragment()); true }
-                R.id.nav_history -> { replaceFragment(HistoryFragment()); true }
-                R.id.nav_dashboard -> { replaceFragment(DashboardFragment()); true }
-                R.id.nav_settings -> { replaceFragment(SettingFragment()); true }
-                else -> true
+                R.id.nav_home -> {
+                    switchFragment(homeFragment)
+                    true
+                }
+                R.id.nav_history -> {
+                    switchFragment(historyFragment)
+                    true
+                }
+                R.id.nav_dashboard -> {
+                    switchFragment(dashboardFragment)
+                    true
+                }
+                R.id.nav_settings -> {
+                    switchFragment(settingFragment)
+                    true
+                }
+                else -> false
             }
         }
-
-        // Khởi động WorkManager định kỳ để dọn ảnh cũ
         com.example.dmsapplication.worker.SyncWorker.schedulePeriodic(this)
     }
 
-    private fun replaceFragment(fragment: Fragment) {
+    private fun switchFragment(targetFragment: Fragment) {
+        if (activeFragment == targetFragment) return
+
         supportFragmentManager.beginTransaction()
-            .replace(R.id.fragment_container, fragment)
+            .hide(activeFragment)
+            .show(targetFragment)
             .commit()
+
+        activeFragment = targetFragment
     }
 }

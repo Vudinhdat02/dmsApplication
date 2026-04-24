@@ -21,4 +21,6 @@ interface StatsDao {
     // Lấy các bản ghi chưa sync
     @Query("SELECT * FROM driver_stats WHERE isSynced = 0")
     suspend fun getUnsynced(): List<DriverStats>
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnoreConflict(stats: DriverStats): Long
 }

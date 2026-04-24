@@ -39,7 +39,7 @@
             android:text="Bắt đầu hành trình an toàn!"
             android:textSize="26sp"
             android:textStyle="bold"
-            android:textColor="#333333"
+            android:textColor="#00BCD4"
             android:gravity="center"
             android:layout_marginBottom="20dp"/>
 

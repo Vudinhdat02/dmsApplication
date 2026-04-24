@@ -10,41 +10,68 @@ class LocationHelper(
     context: Context,
     private val onSpeedUpdate: (Float, String) -> Unit
 ) {
-    private val fusedLocationClient =
-        LocationServices.getFusedLocationProviderClient(context)
+    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
 
-    // BIẾN ĐƯỢC THÊM VÀO ĐỂ LƯU LẠI VỊ TRÍ HIỆN TẠI
     var currentLocation: Location? = null
+    private var lastLocation: Location? = null
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            result.lastLocation?.let { location ->
-                // Cập nhật vị trí mới nhất vào biến để HomeFragment lấy được khi có va chạm
-                currentLocation = location
+            val location = result.lastLocation ?: return
 
-                // Kiểm tra GPS có tính được tốc độ không (hasSpeed = false khi tín hiệu yếu)
-                val speedKmh = if (location.hasSpeed()) location.speed * 3.6f else 0f
-                val status = when {
-                    speedKmh >= 5f  -> "Trạng thái: Đang lái (${speedKmh.toInt()} km/h)"
-                    speedKmh > 0f   -> "Trạng thái: Chậm (${speedKmh.toInt()} km/h)"
-                    else            -> "Trạng thái: Đứng yên"
+            if (location.accuracy > 50f) return
+
+            var speedKmh = 0f
+
+            if (location.hasSpeed() && location.speed >= 0f) {
+                speedKmh = location.speed * 3.6f
+            } else if (lastLocation != null) {
+                val distance = lastLocation!!.distanceTo(location)
+                val timeDelta = (location.time - lastLocation!!.time) / 1000f
+                if (timeDelta > 0 && distance > 2f) {
+                    speedKmh = (distance / timeDelta) * 3.6f
                 }
-                onSpeedUpdate(speedKmh, status)
             }
+
+            if (speedKmh < 3.0f) speedKmh = 0f
+
+            if (speedKmh > 200f) speedKmh = 0f
+
+            currentLocation = location
+            lastLocation = location
+
+            val status = when {
+                speedKmh >= 5f -> "Trạng thái: Đang lái"
+                else           -> "Trạng thái: Đứng yên"
+            }
+            onSpeedUpdate(speedKmh, status)
         }
     }
 
     @SuppressLint("MissingPermission")
     fun startTracking() {
-        val locationRequest = LocationRequest.Builder(
-            Priority.PRIORITY_HIGH_ACCURACY, 1000L  //1s thay vì 2s để cập nhật nhanh hơn
-        ).setMinUpdateIntervalMillis(500L).build()
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+            .setMinUpdateIntervalMillis(500L)
+            .setMaxUpdateDelayMillis(2000L)
+            .setWaitForAccurateLocation(false)
+            .build()
+
+        fusedLocationClient.lastLocation.addOnSuccessListener { lastKnown ->
+            lastKnown?.let {
+                currentLocation = it
+                lastLocation = it
+            }
+        }
+
         fusedLocationClient.requestLocationUpdates(
-            locationRequest, locationCallback, Looper.getMainLooper()
+            locationRequest,
+            locationCallback,
+            Looper.getMainLooper()
         )
     }
 
     fun stopTracking() {
         fusedLocationClient.removeLocationUpdates(locationCallback)
+        lastLocation = null
     }
 }

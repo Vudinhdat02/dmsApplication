@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import retrofit2.Retrofit
+import retrofit2.converter.gson.GsonConverterFactory
 
 class DashboardViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -68,7 +70,6 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             val index = if (dayOfWeek == Calendar.SUNDAY) 6 else dayOfWeek - 2
             weekCounts[index] += currentErrors.toFloat()
 
-            // KIỂM TRA XEM CÓ PHẢI LÀ DỮ LIỆU CỦA HÔM NAY KHÔNG
             if (statCalendar.get(Calendar.YEAR) == todayCalendar.get(Calendar.YEAR) &&
                 statCalendar.get(Calendar.DAY_OF_YEAR) == todayCalendar.get(Calendar.DAY_OF_YEAR)) {
                 todayErrors += currentErrors
@@ -79,40 +80,48 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         _totalDrowsy.value = totalDrowsyWeek
         _totalHead.value = totalHeadWeek
 
-        //Dựa trên hôm nay, trừ 1 điểm
         val dailyScore = (100 - (todayErrors * 1)).coerceIn(0, 100)
         _safetyScore.value = dailyScore
 
-        // Gửi tổng lỗi tuần và lỗi hôm nay cho AI phân tích
         val totalErrorsWeek = totalDrowsyWeek + totalHeadWeek
         generateAiInsight(weekCounts, dailyScore, todayErrors, totalErrorsWeek)
     }
 
     private suspend fun generateAiInsight(weekCounts: FloatArray, dailyScore: Int, todayErrors: Int, totalErrorsWeek: Int) {
         try {
-            val generativeModel = GenerativeModel(
-                modelName = "gemini-2.5-flash",
-                apiKey = com.example.dmsapplication.BuildConfig.GEMINI_API_KEY,
-                systemInstruction = content {
-                    text("Bạn là trợ lý AI phân tích an toàn lái xe. Hãy nhìn vào điểm số hôm nay và xu hướng tuần để nhận xét. Trả lời cực kỳ ngắn gọn (dưới 40 từ), thân thiện và dùng tiếng Việt.")
-                }
+            val retrofit = Retrofit.Builder()
+                .baseUrl("https://api.groq.com/openai/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build()
+
+            val service = retrofit.create(GroqApiService::class.java)
+
+            val systemMessage = "Bạn là trợ lý AI phân tích an toàn lái xe. Trả lời cực kỳ ngắn gọn (dưới 40 từ), thân thiện và dùng tiếng Việt."
+            val userPrompt = """
+            Điểm lái xe HÔM NAY: $dailyScore/100 (Số lỗi hôm nay: $todayErrors).
+            Tổng lỗi cả tuần: $totalErrorsWeek.
+            Biểu đồ vi phạm (T2->CN): ${weekCounts.joinToString(", ")}.
+            Hãy nhận xét thái độ lái xe hôm nay và đưa ra lời khuyên ngắn gọn.
+        """.trimIndent()
+
+            val request = GroqRequest(
+                model = "llama-3.1-8b-instant",
+                messages = listOf(
+                    Message("system", systemMessage),
+                    Message("user", userPrompt)
+                )
             )
 
-            // Tách biệt rõ ràng Hôm Nay và Cả Tuần
-            val prompt = """
-                Điểm lái xe HÔM NAY: $dailyScore/100 (Số lỗi hôm nay: $todayErrors).
-                Tổng lỗi cả tuần: $totalErrorsWeek.
-                Biểu đồ vi phạm từ Thứ 2 -> Chủ nhật: ${weekCounts.joinToString(", ")}.
-                Hãy nhận xét về thái độ lái xe hôm nay và đưa ra lời khuyên ngắn gọn.
-            """.trimIndent()
+            val authHeader = "Bearer ${com.example.dmsapplication.BuildConfig.GROQ_API_KEY}"
+            val response = service.getChatCompletion(authHeader, request)
+            val aiResult = response.choices.firstOrNull()?.message?.content?.replace("*", "")?.trim()
+                ?: "Hôm nay bạn lái xe ổn định, hãy tiếp tục phát huy!"
 
-            val response = generativeModel.generateContent(prompt)
-            val cleanText = response.text?.replace("*", "")?.trim() ?: "Hôm nay bạn lái xe rất tốt. Hãy tiếp tục giữ vững phong độ nhé!"
-            _aiInsight.value = cleanText
+            _aiInsight.value = aiResult
 
         } catch (e: Exception) {
-            android.util.Log.e("GeminiDebug", "Lỗi chi tiết từ Google: ", e)
-            _aiInsight.value = "Chưa thể kết nối AI lúc này. Hãy chú ý giữ tỉnh táo khi lái xe!"
+            android.util.Log.e("GroqDebug", "Lỗi Groq: ${e.message}")
+            _aiInsight.value = "AI đang nghỉ ngơi một chút. Hãy luôn tập trung lái xe nhé!"
         }
     }
 }

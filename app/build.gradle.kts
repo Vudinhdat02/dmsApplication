@@ -35,10 +35,8 @@ android {
             properties.load(FileInputStream(localPropertiesFile))
         }
 
-        // Đọc các API Key từ file local.properties và đưa vào BuildConfig
         buildConfigField("String", "BREVO_API_KEY", "\"${properties.getProperty("BREVO_API_KEY")}\"")
-        buildConfigField("String", "GEMINI_API_KEY", "\"${properties.getProperty("GEMINI_API_KEY")}\"") // ĐÃ THÊM DÒNG NÀY
-    }
+        buildConfigField("String", "GROQ_API_KEY", "\"${properties.getProperty("GROQ_API_KEY")}\"")    }
 
     buildTypes {
         release {
@@ -79,7 +77,7 @@ dependencies {
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage:20.3.0")
-
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     // Google Play Services
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 

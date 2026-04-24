@@ -55,6 +55,13 @@ class HomeViewModel : ViewModel() {
 
     private val alertRepository = AlertRepository()
 
+    private val _isCameraPreviewEnabled = MutableStateFlow(true)
+    val isCameraPreviewEnabled = _isCameraPreviewEnabled.asStateFlow()
+
+    fun setCameraPreviewEnabled(enabled: Boolean) {
+        _isCameraPreviewEnabled.value = enabled
+    }
+
     fun onDmsResult(isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean) {
         if (!_isMonitoringEnabled.value) {
             if (_isDrowsy.value) _isDrowsy.value = false
@@ -84,7 +91,6 @@ class HomeViewModel : ViewModel() {
             if (isYawning) {
                 _yawnCount.value += 1
 
-                // Nếu ngáp 3 lần, 6 lần, 9 lần... thì phát âm thanh khuyên nghỉ ngơi
                 if (_yawnCount.value > 0 && _yawnCount.value % 3 == 0) {
                     viewModelScope.launch {
                         _suggestRest.emit(true)

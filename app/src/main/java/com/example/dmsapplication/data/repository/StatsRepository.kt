@@ -4,10 +4,12 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.util.Log
 import com.example.dmsapplication.data.local.AppDatabase
 import com.example.dmsapplication.data.model.DriverStats
 import com.example.dmsapplication.data.remote.CloudinaryService
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.tasks.await
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
@@ -15,6 +17,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.tasks.await
+import com.google.firebase.firestore.FirebaseFirestore
 
 class StatsRepository(private val context: Context) {
 
@@ -59,38 +63,57 @@ class StatsRepository(private val context: Context) {
         return try {
             val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
             val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
-            val preset = CloudinaryService.UPLOAD_PRESET
-                .toRequestBody("text/plain".toMediaTypeOrNull())
-
-            // Thêm folder theo userId để phân biệt tài khoản
-            val folder = "dms/${stats.userId}"
-                .toRequestBody("text/plain".toMediaTypeOrNull())
+            val preset = CloudinaryService.UPLOAD_PRESET.toRequestBody("text/plain".toMediaTypeOrNull())
+            val folder = "dms/${stats.userId}".toRequestBody("text/plain".toMediaTypeOrNull())
 
             val response = CloudinaryService.api.uploadImage(
-                cloudName    = CloudinaryService.CLOUD_NAME,
-                file         = body,
+                cloudName = CloudinaryService.CLOUD_NAME,
+                file = body,
                 uploadPreset = preset,
-                folder       = folder
+                folder = folder
             )
 
             if (response.isSuccessful) {
                 val url = response.body()?.secure_url ?: return false
-                // Cập nhật DB: đánh dấu đã sync + lưu URL cloud
-                dao.update(stats.copy(
+
+                val syncedStats = stats.copy(
                     cloudImageUrl = url,
-                    isSynced      = true,
-                    localImagePath = "" // Không cần local nữa
-                ))
-                // Xóa file local để tiết kiệm bộ nhớ
-                file.delete()
-                true
+                    isSynced = true,
+                    localImagePath = ""
+                )
+
+                val isFirestoreSuccess = saveToFirestore(syncedStats)
+
+                if (isFirestoreSuccess) {
+                    dao.update(syncedStats)
+                    file.delete()
+                    true
+                } else {
+                    false
+                }
             } else false
         } catch (e: Exception) {
             false
         }
     }
 
-    // Xóa ảnh cũ hơn 2 ngày trên Cloudinary
+    private suspend fun saveToFirestore(stats: DriverStats): Boolean {
+        return try {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            // Tạo một Document ID duy nhất bằng userId + timestamp
+            val docId = "${stats.userId}_${stats.timestamp}"
+
+            db.collection("driver_stats")
+                .document(docId)
+                .set(stats)
+                .await()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
     suspend fun deleteOldCloudImages(userId: String) {
         val twoDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(2)
         val oldStats = dao.getOldSyncedByUser(userId, twoDaysAgo)
@@ -123,5 +146,49 @@ class StatsRepository(private val context: Context) {
             val withoutVersion = afterUpload.substringAfter("/") // dms/userId/filename.jpg
             withoutVersion.substringBeforeLast(".") // dms/userId/filename
         } catch (e: Exception) { "" }
+    }
+
+    suspend fun fetchFromCloud(userId: String) {
+        try {
+            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val snapshot = db.collection("driver_stats")
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+
+            val remoteList = snapshot.toObjects(DriverStats::class.java)
+
+            remoteList.forEach { remoteStats ->
+                // insertIgnoreConflict giúp tránh ghi đè nếu bản ghi đã có ở local
+                dao.insertIgnoreConflict(remoteStats)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    suspend fun refreshStatsFromCloud(userId: String) {
+        Log.d("HISTORY_CHECK", "1. Bắt đầu gọi fetch từ Cloud cho User: $userId")
+        try {
+            val db = FirebaseFirestore.getInstance()
+            val snapshot = db.collection("driver_stats")
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+
+            Log.d("HISTORY_CHECK", "2. Đã lấy xong snapshot. Số lượng bản ghi trên Cloud: ${snapshot.size()}")
+
+            val remoteList = snapshot.toObjects(DriverStats::class.java)
+            Log.d("HISTORY_CHECK", "3. Chuyển đổi thành List Object thành công: ${remoteList.size} mục")
+
+            remoteList.forEach { remoteStats ->
+                dao.insertIgnoreConflict(remoteStats)
+            }
+            Log.d("HISTORY_CHECK", "4. Đã thực hiện Insert vào Room xong.")
+
+        } catch (e: Exception) {
+            Log.e("HISTORY_CHECK", "LỖI TẠI HISTORY: ${e.message}")
+            e.printStackTrace()
+        }
     }
 }
