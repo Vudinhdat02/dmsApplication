@@ -121,10 +121,11 @@ class HomeViewModel : ViewModel() {
         _isGpsEnabled.value = enabled
         if (!enabled) {
             _isMonitoringEnabled.value = true
-            _speed.value = "GPS đã tắt"
+            _speed.value = "Tốc độ: 0.0 km/h"
             _locationStatus.value = "Giám sát không cần GPS"
         } else {
             _isMonitoringEnabled.value = false
+            _speed.value = "Tốc độ: 0.0 km/h"
             _locationStatus.value = "Trạng thái: Đang chờ GPS..."
         }
     }

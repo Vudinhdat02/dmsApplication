@@ -8,12 +8,8 @@ import com.google.firebase.auth.FirebaseAuth
 class SettingViewModel : ViewModel() {
 
     private val auth = FirebaseAuth.getInstance()
-
-    // LiveData để Fragment quan sát tên người dùng
     private val _userName = MutableLiveData<String>()
     val userName: LiveData<String> get() = _userName
-
-    // LiveData để quản lý trạng thái Switch
     private val _isVectorEnabled = MutableLiveData<Boolean>(false)
     val isVectorEnabled: LiveData<Boolean> get() = _isVectorEnabled
 

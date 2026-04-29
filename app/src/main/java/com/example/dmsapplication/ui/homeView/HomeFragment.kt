@@ -220,11 +220,9 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                     .toFloatOrNull() ?: 0f
 
                 val displaySpeed = speedVal.toInt()
-
                 tvSpeedNumber.text = displaySpeed.toString()
 
                 val progressVal = displaySpeed.coerceIn(0, 120)
-
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                     pbSpeed.setProgress(progressVal, true)
                 } else {

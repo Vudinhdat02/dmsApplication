@@ -5,14 +5,18 @@ import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.ToneGenerator
 import com.example.dmsapplication.R
+import java.util.LinkedList
 
 class AlarmHelper(private val context: Context) {
+
     private val toneGenerator = ToneGenerator(android.media.AudioManager.STREAM_ALARM, 100)
     private var warningPlayer: MediaPlayer? = null
     private var yawnPlayer: MediaPlayer? = null
+    private enum class AlertType { WARNING, REST }
+    private val alertQueue = LinkedList<AlertType>()
+    private var isPlaying = false
 
     init {
-        // Khởi tạo MediaPlayer DUY NHẤT một lần khi App bắt đầu
         prepareMediaPlayers()
     }
 
@@ -23,16 +27,16 @@ class AlarmHelper(private val context: Context) {
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .build()
 
-            // 1. Chuẩn bị file cảnh báo nguy hiểm (Nhắm mắt, quay đầu)
             warningPlayer = MediaPlayer.create(context, R.raw.warning).apply {
                 setAudioAttributes(audioAttributes)
-                isLooping = false // Cực kỳ quan trọng: Phát hết 1 lần rồi tự dừng
+                isLooping = false
+                setOnCompletionListener { onPlaybackComplete() }
             }
 
-            // 2. Chuẩn bị file cảnh báo nghỉ ngơi (Ngáp ngủ)
             yawnPlayer = MediaPlayer.create(context, R.raw.ngap).apply {
                 setAudioAttributes(audioAttributes)
                 isLooping = false
+                setOnCompletionListener { onPlaybackComplete() }
             }
 
         } catch (e: Exception) {
@@ -40,53 +44,66 @@ class AlarmHelper(private val context: Context) {
         }
     }
 
-    // Phát âm thanh cảnh báo nguy hiểm khẩn cấp
+    private fun onPlaybackComplete() {
+        isPlaying = false
+        if (alertQueue.isNotEmpty()) {
+            playNext()
+        }
+    }
+
+    private fun playNext() {
+        val next = alertQueue.poll() ?: return
+        isPlaying = true
+
+        toneGenerator.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
+
+        val player = when (next) {
+            AlertType.WARNING -> warningPlayer
+            AlertType.REST    -> yawnPlayer
+        }
+
+        player?.let { mp ->
+            mp.seekTo(0)
+            mp.start()
+        }
+    }
+
     fun playAlert() {
         try {
-            // Bíp một cái ngắn (Dùng ToneGenerator rất nhẹ)
-            toneGenerator.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 200)
+            if (alertQueue.lastOrNull() == AlertType.WARNING) return
 
-            warningPlayer?.let { mp ->
-                if (!mp.isPlaying) {
-                    // Nếu đang không phát thì tua về đầu và phát
-                    mp.seekTo(0)
-                    mp.start()
-                }
-                // (Nếu mp đang phát rồi thì bỏ qua, cứ để nó phát tiếp cho hết câu)
-            } ?: run {
-                // Nếu rủi ro bị crash driver, khởi tạo lại âm thanh
-                prepareMediaPlayers()
-                warningPlayer?.start()
+            alertQueue.add(AlertType.WARNING)
+
+            if (!isPlaying) {
+                playNext()
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // Phát âm thanh khuyên nghỉ ngơi khi ngáp 3 lần
     fun playRestAlert() {
         try {
-            yawnPlayer?.let { mp ->
-                if (!mp.isPlaying) {
-                    mp.seekTo(0)
-                    mp.start()
-                }
-            } ?: run {
-                prepareMediaPlayers()
-                yawnPlayer?.start()
+            if (alertQueue.lastOrNull() == AlertType.REST) return
+
+            alertQueue.add(AlertType.REST)
+
+            if (!isPlaying) {
+                playNext()
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
 
-    // Dừng âm thanh
     fun stopAlert() {
+        alertQueue.clear()
     }
 
-    // Giải phóng bộ nhớ khi tắt Fragment (Vẫn giữ nguyên để tránh rò rỉ bộ nhớ)
     fun release() {
         try {
+            alertQueue.clear()
+            isPlaying = false
             toneGenerator.release()
 
             warningPlayer?.stop()
