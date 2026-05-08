@@ -29,6 +29,14 @@ class DmsAnalyzer(
     // Ngưỡng quay đầu
     private val HEAD_DISTRACTED_DURATION = 1000L
 
+    /**
+     * Thời gian tối đa cho phép mất khuôn mặt trước khi cảnh báo "quay đầu".
+     * Nếu mất mặt NGẮN hơn mốc này → đang quay đầu nhanh → cảnh báo.
+     * Nếu mất mặt DÀI hơn mốc này  → người dùng có thể rời đi → tắt cảnh báo.
+     */
+    private val FACE_LOST_ALERT_DURATION   = 800L
+    private val FACE_LOST_SILENCE_DURATION = 5000L
+
     // Ngưỡng ngáp ngủ
     private val MAR_THRESHOLD = 0.38f
     private val YAWN_DURATION = 800L
@@ -40,23 +48,25 @@ class DmsAnalyzer(
     private val MOUTH_LEFT  = 61
     private val MOUTH_RIGHT = 291
 
-    // Điểm bên trong môi để tính MAR
     private val INNER_LIP_TOP    = 13
     private val INNER_LIP_BOTTOM = 14
     private val INNER_MOUTH_LEFT = 78
     private val INNER_MOUTH_RIGHT= 308
 
-    // State
+    // State — mắt & ngáp
     private val earHistory = ArrayDeque<Float>(SMOOTH_WINDOW)
     private var eyesClosedStartTime = 0L
     private var isDrowsyAlerting    = false
+    private var yawnStartTime     = 0L
+    private var lastYawnTime      = 0L
+    private var isYawningAlerting = false
 
+    // State — quay đầu (có mặt)
     private var headDistractedStartTime = 0L
     private var isHeadAlerting          = false
 
-    private var yawnStartTime = 0L
-    private var lastYawnTime = 0L
-    private var isYawningAlerting = false
+    // State — mất khuôn mặt
+    private var faceLostStartTime = 0L   // Thời điểm bắt đầu mất mặt
 
     override fun analyze(imageProxy: ImageProxy) {
         val bitmap  = imageProxy.toBitmap()
@@ -66,9 +76,12 @@ class DmsAnalyzer(
         val result = faceLandmarker.detectForVideo(mpImage, nowMs)
 
         if (result.faceLandmarks().isNotEmpty()) {
+            // Khuôn mặt được phát hiện → reset bộ đếm mất mặt
+            faceLostStartTime = 0L
+
             val landmarks = result.faceLandmarks()[0]
 
-            // 1. Tính EAR nhắm mắt (Sử dụng 3D Landmarks)
+            // 1. EAR — nhắm mắt
             val leftPts  = LEFT_EYE_INDICES.map  { landmarks[it] }
             val rightPts = RIGHT_EYE_INDICES.map { landmarks[it] }
             val rawEar   = (EarCalculator.calculateEAR(leftPts) + EarCalculator.calculateEAR(rightPts)) / 2f
@@ -78,20 +91,16 @@ class DmsAnalyzer(
             val smoothedEar = earHistory.average().toFloat()
 
             val mouthWidth = abs(landmarks[MOUTH_RIGHT].x() - landmarks[MOUTH_LEFT].x())
+            val isEyesClosed = if (isSunglassesMode) false
+            else smoothedEar < EAR_THRESHOLD && mouthWidth < MOUTH_WIDTH_THRESHOLD
 
-            val isEyesClosed = if (isSunglassesMode) {
-                false
-            } else {
-                smoothedEar < EAR_THRESHOLD && mouthWidth < MOUTH_WIDTH_THRESHOLD
-            }
-
-            // 2. Tính góc đầu
+            // 2. Góc đầu
             val headAngles = HeadPoseEstimator.estimate(landmarks)
-            val isHeadOff  = if (headAngles != null && calibrationManager.isCalibrated) {
+            val isHeadOff  = if (headAngles != null && calibrationManager.isCalibrated)
                 calibrationManager.isHeadDistracted(headAngles)
-            } else false
+            else false
 
-            // 3. Tính MAR ngáp ngủ(dùng 3d landmark)
+            // 3. MAR — ngáp
             val isYawningNow = if (isYawnMode) {
                 val mar = MarCalculator.calculateMAR(
                     landmarks[INNER_LIP_TOP],
@@ -105,55 +114,82 @@ class DmsAnalyzer(
             // State machine nhắm mắt
             if (isEyesClosed) {
                 if (eyesClosedStartTime == 0L) eyesClosedStartTime = nowMs
-                if (nowMs - eyesClosedStartTime >= EYE_CLOSED_DURATION) {
-                    isDrowsyAlerting = true
-                }
+                if (nowMs - eyesClosedStartTime >= EYE_CLOSED_DURATION) isDrowsyAlerting = true
             } else {
                 eyesClosedStartTime = 0L
                 isDrowsyAlerting    = false
             }
 
-            // State machine quay đầu
+            // State machine quay đầu (có mặt)
             if (isHeadOff) {
                 if (headDistractedStartTime == 0L) headDistractedStartTime = nowMs
-                if (nowMs - headDistractedStartTime >= HEAD_DISTRACTED_DURATION) {
-                    isHeadAlerting = true
-                }
+                if (nowMs - headDistractedStartTime >= HEAD_DISTRACTED_DURATION) isHeadAlerting = true
             } else {
                 headDistractedStartTime = 0L
                 isHeadAlerting          = false
             }
 
-            // State machine ngáp ngủ (Xung Trigger 1 lần)
+            // ── State machine ngáp
             if (isYawningNow) {
                 if (yawnStartTime == 0L) yawnStartTime = nowMs
-                // Nếu há miệng đủ lâu VÀ đã qua thời gian Cooldown từ lần ngáp trước
                 if (nowMs - yawnStartTime >= YAWN_DURATION && nowMs - lastYawnTime > YAWN_COOLDOWN) {
                     isYawningAlerting = true
-                    lastYawnTime = nowMs // Đánh dấu thời điểm ngáp để tính Cooldown
+                    lastYawnTime = nowMs
                 } else {
-                    isYawningAlerting = false // Ngay frame tiếp theo sẽ tắt để đếm đúng 1 lần
+                    isYawningAlerting = false
                 }
             } else {
-                yawnStartTime = 0L
+                yawnStartTime     = 0L
                 isYawningAlerting = false
             }
 
-            // 5. Gửi kết quả mỗi frame
             onResults(isDrowsyAlerting, isHeadAlerting, isYawningAlerting, result)
 
         } else {
-            resetAll()
-            onResults(false, false, false, null)
+            // Không phát hiện khuôn mặt
+            resetEyeAndYawnState()
+
+            // Chỉ áp dụng logic "mất mặt = quay đầu" khi đã calibrate
+            if (calibrationManager.isCalibrated) {
+                if (faceLostStartTime == 0L) faceLostStartTime = nowMs
+                val faceLostMs = nowMs - faceLostStartTime
+
+                isHeadAlerting = when {
+                    // Vừa mất mặt, chưa đủ ngưỡng thời gian → chưa cảnh báo
+                    faceLostMs < FACE_LOST_ALERT_DURATION   -> false
+
+                    // Mất mặt trong khoảng cảnh báo → đang quay đầu
+                    faceLostMs < FACE_LOST_SILENCE_DURATION -> true
+
+                    // Mất mặt quá lâu → người dùng rời đi, im lặng
+                    else                                    -> false
+                }
+                // Giữ nguyên headDistractedStartTime = 0 vì không cần dùng ở nhánh này
+                headDistractedStartTime = 0L
+
+                onResults(false, isHeadAlerting, false, null)
+            } else {
+                resetAll()
+                onResults(false, false, false, null)
+            }
         }
 
         imageProxy.close()
+    }
+
+    private fun resetEyeAndYawnState() {
+        earHistory.clear()
+        eyesClosedStartTime = 0L
+        isDrowsyAlerting    = false
+        yawnStartTime       = 0L
+        isYawningAlerting   = false
     }
 
     fun resetAll() {
         eyesClosedStartTime     = 0L
         headDistractedStartTime = 0L
         yawnStartTime           = 0L
+        faceLostStartTime       = 0L
         isDrowsyAlerting        = false
         isHeadAlerting          = false
         isYawningAlerting       = false
