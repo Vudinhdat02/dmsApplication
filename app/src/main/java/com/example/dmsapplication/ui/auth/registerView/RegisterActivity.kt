@@ -1,4 +1,4 @@
-package com.example.dmsapplication.ui.register.ui.auth.registerView
+package com.example.dmsapplication.ui.auth.registerView
 
 import android.app.DatePickerDialog
 import android.os.Bundle
@@ -23,7 +23,7 @@ class RegisterActivity : AppCompatActivity() {
         binding = FragmentRegisterBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val repository = AuthRepository()
+        val repository = AuthRepository(this)
         val factory = RegisterViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[RegisterViewModel::class.java]
 
@@ -42,7 +42,7 @@ class RegisterActivity : AppCompatActivity() {
                     Toast.makeText(this, "Ngày sinh không thể ở tương lai!", Toast.LENGTH_SHORT).show()
                 } else {
                     selectedDate = selected
-                    binding.edtDob.setText(String.format("%02d/%02d/%d", d, m + 1, y))
+                    binding.edtDob.setText(String.format(Locale.getDefault(), "%02d/%02d/%d", d, m + 1, y))
                 }
             }, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
         }
@@ -56,30 +56,29 @@ class RegisterActivity : AppCompatActivity() {
             // BƯỚC 1: Kiểm tra trống
             if (name.isEmpty() || email.isEmpty() || pass.isEmpty() || selectedDate == null) {
                 Toast.makeText(this, "Vui lòng nhập đầy đủ thông tin", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener // SAI -> DỪNG LUÔN, KHÔNG CHẠY XUỐNG DƯỚI
+                return@setOnClickListener 
             }
 
             // BƯỚC 2: Kiểm tra định dạng Email
             if (!Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
                 binding.edtEmail.error = "Email không đúng định dạng"
                 binding.edtEmail.requestFocus()
-                return@setOnClickListener // SAI -> DỪNG LUÔN
+                return@setOnClickListener 
             }
 
             // BƯỚC 3: Kiểm tra độ dài mật khẩu
             if (pass.length < 6) {
                 binding.edtPassword.error = "Mật khẩu phải từ 6 ký tự trở lên"
                 binding.edtPassword.requestFocus()
-                return@setOnClickListener // SAI -> DỪNG LUÔN
+                return@setOnClickListener 
             }
 
-            // BƯỚC 4: Kiểm tra tuổi (Logic quan trọng nhất)
+            // BƯỚC 4: Kiểm tra tuổi
             if (!checkIs18Plus(selectedDate!!)) {
                 Toast.makeText(this, "Bạn phải đủ 18 tuổi để đăng ký", Toast.LENGTH_LONG).show()
-                return@setOnClickListener // CHƯA ĐỦ TUỔI -> DỪNG LUÔN, KHÔNG GỌI FIREBASE
+                return@setOnClickListener
             }
 
-            // CHỈ KHI VƯỢT QUA TẤT CẢ CÁC BƯỚC TRÊN THÌ MỚI CHẠY DÒNG NÀY
             android.util.Log.d("DMS_DEBUG", "Mọi thứ OK, bắt đầu gọi ViewModel để đăng ký...")
             viewModel.register(email, pass, name, dob)
         }

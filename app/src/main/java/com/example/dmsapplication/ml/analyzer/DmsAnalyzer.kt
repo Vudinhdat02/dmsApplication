@@ -14,15 +14,14 @@ import kotlin.math.abs
 class DmsAnalyzer(
     private val faceLandmarker: FaceLandmarker,
     private val calibrationManager: CalibrationManager,
-    // Cập nhật Callback có thêm isYawning
     private val onResults: (isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean, result: FaceLandmarkerResult?) -> Unit
 ) : ImageAnalysis.Analyzer {
 
     var isSunglassesMode: Boolean = false
-    var isYawnMode: Boolean = true // Bật/tắt giám sát ngáp
+    var isYawnMode: Boolean = true
 
     // Ngưỡng nhắm mắt
-    private val EAR_THRESHOLD         = 0.18f
+    private val EAR_THRESHOLD         = 0.16f
     private val SMOOTH_WINDOW         = 3
     private val MOUTH_WIDTH_THRESHOLD = 0.5f
     private val EYE_CLOSED_DURATION   = 1000L
@@ -31,11 +30,11 @@ class DmsAnalyzer(
     private val HEAD_DISTRACTED_DURATION = 1000L
 
     // Ngưỡng ngáp ngủ
-    private val MAR_THRESHOLD = 0.5f     // Độ mở miệng khi ngáp (thường > 0.5)
-    private val YAWN_DURATION = 800L     // Phải há miệng đủ 0.8s mới tính là ngáp (lọc nói chuyện)
-    private val YAWN_COOLDOWN = 3000L    // Cooldown 3s để không đếm 1 cái ngáp thành nhiều lần
+    private val MAR_THRESHOLD = 0.38f
+    private val YAWN_DURATION = 800L
+    private val YAWN_COOLDOWN = 3000L
 
-    // ── Landmark indices ──────────────────────────────────────────────────
+    // Landmark indices
     private val LEFT_EYE_INDICES  = listOf(362, 385, 387, 263, 373, 380)
     private val RIGHT_EYE_INDICES = listOf(33,  160, 158, 133, 153, 144)
     private val MOUTH_LEFT  = 61
@@ -69,9 +68,9 @@ class DmsAnalyzer(
         if (result.faceLandmarks().isNotEmpty()) {
             val landmarks = result.faceLandmarks()[0]
 
-            // 1. Tính EAR nhắm mắt
-            val leftPts  = LEFT_EYE_INDICES.map  { floatArrayOf(landmarks[it].x(), landmarks[it].y()) }
-            val rightPts = RIGHT_EYE_INDICES.map { floatArrayOf(landmarks[it].x(), landmarks[it].y()) }
+            // 1. Tính EAR nhắm mắt (Sử dụng 3D Landmarks)
+            val leftPts  = LEFT_EYE_INDICES.map  { landmarks[it] }
+            val rightPts = RIGHT_EYE_INDICES.map { landmarks[it] }
             val rawEar   = (EarCalculator.calculateEAR(leftPts) + EarCalculator.calculateEAR(rightPts)) / 2f
 
             if (earHistory.size >= SMOOTH_WINDOW) earHistory.removeFirst()
@@ -92,14 +91,14 @@ class DmsAnalyzer(
                 calibrationManager.isHeadDistracted(headAngles)
             } else false
 
-            // 3. Tính MAR ngáp ngủ
+            // 3. Tính MAR ngáp ngủ(dùng 3d landmark)
             val isYawningNow = if (isYawnMode) {
-                val topLip    = floatArrayOf(landmarks[INNER_LIP_TOP].x(), landmarks[INNER_LIP_TOP].y())
-                val bottomLip = floatArrayOf(landmarks[INNER_LIP_BOTTOM].x(), landmarks[INNER_LIP_BOTTOM].y())
-                val leftMouth = floatArrayOf(landmarks[INNER_MOUTH_LEFT].x(), landmarks[INNER_MOUTH_LEFT].y())
-                val rightMouth= floatArrayOf(landmarks[INNER_MOUTH_RIGHT].x(), landmarks[INNER_MOUTH_RIGHT].y())
-
-                val mar = MarCalculator.calculateMAR(topLip, bottomLip, leftMouth, rightMouth)
+                val mar = MarCalculator.calculateMAR(
+                    landmarks[INNER_LIP_TOP],
+                    landmarks[INNER_LIP_BOTTOM],
+                    landmarks[INNER_MOUTH_LEFT],
+                    landmarks[INNER_MOUTH_RIGHT]
+                )
                 mar > MAR_THRESHOLD
             } else false
 

@@ -23,8 +23,6 @@ import com.google.firebase.firestore.FirebaseFirestore
 class StatsRepository(private val context: Context) {
 
     private val dao = AppDatabase.getInstance(context).statsDao()
-
-    // Kiểm tra có mạng không
     fun isNetworkAvailable(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork ?: return false
@@ -48,9 +46,8 @@ class StatsRepository(private val context: Context) {
         return dao.insert(stats)
     }
 
-    // Lấy danh sách 2 ngày gần nhất theo user
     fun getRecentStatsByUser(userId: String): Flow<List<DriverStats>> {
-        val twoDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(2)
+        val twoDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
         return dao.getRecentByUser(userId, twoDaysAgo)
     }
 
@@ -75,15 +72,12 @@ class StatsRepository(private val context: Context) {
 
             if (response.isSuccessful) {
                 val url = response.body()?.secure_url ?: return false
-
                 val syncedStats = stats.copy(
                     cloudImageUrl = url,
                     isSynced = true,
                     localImagePath = ""
                 )
-
                 val isFirestoreSuccess = saveToFirestore(syncedStats)
-
                 if (isFirestoreSuccess) {
                     dao.update(syncedStats)
                     file.delete()
@@ -102,7 +96,6 @@ class StatsRepository(private val context: Context) {
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
             // Tạo một Document ID duy nhất bằng userId + timestamp
             val docId = "${stats.userId}_${stats.timestamp}"
-
             db.collection("driver_stats")
                 .document(docId)
                 .set(stats)
@@ -115,31 +108,40 @@ class StatsRepository(private val context: Context) {
     }
 
     suspend fun deleteOldCloudImages(userId: String) {
-        val twoDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(2)
-        val oldStats = dao.getOldSyncedByUser(userId, twoDaysAgo)
+        val sevenDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
+        val oldStats = dao.getOldSyncedByUser(userId, sevenDaysAgo)
         oldStats.forEach { stats ->
+            // 1. Xóa ảnh trên Cloudinary
             if (stats.cloudImageUrl.isNotEmpty()) {
-                // Xóa trên Cloudinary qua public_id
                 val publicId = extractPublicId(stats.cloudImageUrl)
                 if (publicId.isNotEmpty()) {
-                    CloudinaryService.api.deleteImage(
-                        cloudName  = CloudinaryService.CLOUD_NAME,
-                        publicId   = publicId,
-                        apiKey     = CloudinaryService.API_KEY,
-                        signature  = CloudinaryService.generateSignature(publicId)
-                    )
+                    try {
+                        CloudinaryService.api.deleteImage(
+                            cloudName  = CloudinaryService.CLOUD_NAME,
+                            publicId   = publicId,
+                            apiKey     = CloudinaryService.API_KEY,
+                            signature  = CloudinaryService.generateSignature(publicId)
+                        )
+                    } catch (e: Exception) { Log.e("CLEANUP", "Lỗi Cloudinary: ${e.message}") }
                 }
             }
+            try {
+                val docId = "${stats.userId}_${stats.timestamp}"
+                FirebaseFirestore.getInstance()
+                    .collection("driver_stats")
+                    .document(docId)
+                    .delete()
+                    .await()
+            } catch (e: Exception) { Log.e("CLEANUP", "Lỗi Firestore: ${e.message}") }
             dao.delete(stats)
         }
     }
 
     suspend fun getUnsynced(): List<DriverStats> = dao.getUnsynced()
 
-    // Lấy public_id từ URL Cloudinary
     private fun extractPublicId(url: String): String {
         return try {
-            // URL dạng: https://res.cloudinary.com/cloud/image/upload/v123/dms/userId/filename.jpg
+            // https://res.cloudinary.com/cloud/image/upload/v123/dms/userId/filename.jpg
             val parts = url.split("/upload/")
             if (parts.size < 2) return ""
             val afterUpload = parts[1] // v123/dms/userId/filename.jpg
@@ -159,7 +161,6 @@ class StatsRepository(private val context: Context) {
             val remoteList = snapshot.toObjects(DriverStats::class.java)
 
             remoteList.forEach { remoteStats ->
-                // insertIgnoreConflict giúp tránh ghi đè nếu bản ghi đã có ở local
                 dao.insertIgnoreConflict(remoteStats)
             }
         } catch (e: Exception) {
@@ -191,4 +192,6 @@ class StatsRepository(private val context: Context) {
             e.printStackTrace()
         }
     }
+
+
 }

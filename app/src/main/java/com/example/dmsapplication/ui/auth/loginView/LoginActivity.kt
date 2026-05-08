@@ -11,7 +11,7 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.dmsapplication.data.repository.AuthRepository
 import com.example.dmsapplication.databinding.FragmentLoginBinding
 import com.example.dmsapplication.ui.HomeActivity
-import com.example.dmsapplication.ui.register.ui.auth.registerView.RegisterActivity
+import com.example.dmsapplication.ui.auth.registerView.RegisterActivity
 import com.google.firebase.auth.FirebaseAuth
 
 class LoginActivity : AppCompatActivity() {
@@ -31,7 +31,7 @@ class LoginActivity : AppCompatActivity() {
         binding = FragmentLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val repository = AuthRepository()
+        val repository = AuthRepository(this)
         val factory = LoginViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[LoginViewModel::class.java]
 

@@ -20,8 +20,9 @@ class HistoryAdapter : ListAdapter<DriverStats, HistoryAdapter.ViewHolder>(DiffC
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val imgSnapshot: ImageView = view.findViewById(R.id.imgSnapshot)
         val tvDateTime: TextView = view.findViewById(R.id.tvDateTime)
-        val tvDrowsy: TextView = view.findViewById(R.id.tvDrowsyCount)
-        val tvHead: TextView = view.findViewById(R.id.tvHeadCount)
+        val layoutDrowsy: View = view.findViewById(R.id.layoutDrowsy)
+        val layoutHead: View = view.findViewById(R.id.layoutHead)
+
         val tvSpeed: TextView = view.findViewById(R.id.tvSpeed)
         val tvSynced: TextView = view.findViewById(R.id.tvSyncStatus)
     }
@@ -50,14 +51,13 @@ class HistoryAdapter : ListAdapter<DriverStats, HistoryAdapter.ViewHolder>(DiffC
         // Ngày giờ
         val dateFormat = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
         holder.tvDateTime.text = dateFormat.format(Date(item.timestamp))
+        holder.layoutDrowsy.visibility = if (item.drowsyCount > 0) View.VISIBLE else View.GONE
 
-        // Thống kê
-        holder.tvDrowsy.text = "Nhắm mắt: ${item.drowsyCount} lần"
-        holder.tvHead.text   = "Quay đầu: ${item.headDistractedCount} lần"
+        holder.layoutHead.visibility = if (item.headDistractedCount > 0) View.VISIBLE else View.GONE
+
         holder.tvSpeed.text  = "Tốc độ lúc vi phạm: ${"%.1f".format(item.speed)} km/h"
 
-        // Trạng thái sync
-        holder.tvSynced.text = if (item.isSynced) "Đã lưu cloud" else "Chưa đồng bộ"
+        holder.tvSynced.text = if (item.isSynced) "• Đã đồng bộ Cloud" else "• Chưa đồng bộ"
         holder.tvSynced.setTextColor(
             if (item.isSynced) android.graphics.Color.parseColor("#4CAF50")
             else android.graphics.Color.parseColor("#FF9800")

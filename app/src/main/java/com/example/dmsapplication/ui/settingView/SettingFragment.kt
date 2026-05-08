@@ -10,10 +10,10 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.dmsapplication.databinding.FragmentSettingBinding
 import com.example.dmsapplication.ui.OnboardingView.OnboardingActivity
-import com.example.dmsapplication.ui.settingView.profile.ProfileFragment
-import com.example.dmsapplication.ui.settingView.password.ChangePasswordFragment
 import com.example.dmsapplication.ui.settingView.info.AppInfoFragment
 import com.example.dmsapplication.ui.settingView.contact.ContactSettingsFragment
+import com.example.dmsapplication.ui.settingView.password.ChangePasswordFragment
+import com.example.dmsapplication.ui.settingView.profile.ProfileFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 class SettingFragment : Fragment() {

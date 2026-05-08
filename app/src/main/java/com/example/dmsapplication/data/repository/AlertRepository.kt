@@ -54,7 +54,6 @@ class AlertRepository {
             htmlContent = "<h3>PHÁT HIỆN TAI NẠN!</h3><p>Hệ thống DMS ghi nhận xe vừa xảy ra va chạm mạnh.</p><p>Vị trí hiện tại: <a href='$locationLink'>Bấm vào đây để mở Google Maps</a></p>"
         )
 
-        // thêm "return" để báo kết quả về cho ViewModel
         return try {
             val apiKey = BuildConfig.BREVO_API_KEY
             val response = brevoApi.sendEmail(apiKey, request)

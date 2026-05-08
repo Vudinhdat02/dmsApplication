@@ -5,13 +5,11 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.firestore.FirebaseFirestore
 
 class ProfileViewModel : ViewModel() {
-
     private val auth = FirebaseAuth.getInstance()
-    private val dbUrl = "https://dmsdatabase-aceb4-default-rtdb.asia-southeast1.firebasedatabase.app/"
-    private val db = FirebaseDatabase.getInstance(dbUrl).getReference("Users")
+    private val firestore = FirebaseFirestore.getInstance()
 
     private val _userName = MutableLiveData<String>()
     val userName: LiveData<String> = _userName
@@ -34,17 +32,27 @@ class ProfileViewModel : ViewModel() {
 
     private fun loadUserData() {
         val userId = auth.currentUser?.uid ?: return
-        db.child(userId).get().addOnSuccessListener { snapshot ->
-            _userName.postValue(snapshot.child("name").value?.toString() ?: "")
-            _userEmail.postValue(snapshot.child("email").value?.toString() ?: "")
-            _userDob.postValue(snapshot.child("dob").value?.toString() ?: "")
-        }
+        firestore.collection("users").document(userId).get()
+            .addOnSuccessListener { snapshot ->
+                if (snapshot.exists()) {
+                    _userName.postValue(snapshot.getString("name") ?: "")
+                    _userEmail.postValue(snapshot.getString("email") ?: "")
+                    _userDob.postValue(snapshot.getString("dob") ?: "")
+                }
+            }
+            .addOnFailureListener { e ->
+                _errorMessage.postValue(e.message)
+            }
     }
-
     fun updateProfile(name: String, dob: String, imageUri: Uri?) {
         val userId = auth.currentUser?.uid ?: return
-        val updates = mapOf("name" to name, "dob" to dob)
-        db.child(userId).updateChildren(updates)
+
+        val updates = mapOf(
+            "name" to name,
+            "dob"  to dob,
+            "updatedAt" to System.currentTimeMillis()
+        )
+        firestore.collection("users").document(userId).update(updates)
             .addOnSuccessListener { _updateSuccess.postValue(true) }
             .addOnFailureListener { _errorMessage.postValue(it.message) }
     }

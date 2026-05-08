@@ -27,8 +27,7 @@
             android:exported="false"
             android:label="@string/app_name"
             android:theme="@style/Theme.DmsApplication" />
-        <activity
-            android:name=".ui.register.ui.auth.registerView.RegisterActivity"
+        <activity android:name=".ui.auth.registerView.RegisterActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
         <activity

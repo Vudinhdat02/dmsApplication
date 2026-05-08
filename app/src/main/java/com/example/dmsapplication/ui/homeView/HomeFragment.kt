@@ -23,11 +23,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
-import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.dmsapplication.R
-import com.example.dmsapplication.data.model.DriverStats
-import com.example.dmsapplication.data.repository.StatsRepository
 import com.example.dmsapplication.ml.analyzer.DmsAnalyzer
 import com.example.dmsapplication.ml.math.CalibrationManager
 import com.example.dmsapplication.ml.math.HeadPoseEstimator
@@ -36,21 +33,17 @@ import com.example.dmsapplication.ui.homeView.helper.CalibrationDialog
 import com.example.dmsapplication.ui.homeView.helper.LocationHelper
 import com.example.dmsapplication.ui.homeView.helper.OverlayView
 import com.example.dmsapplication.utils.CrashDetector
-import com.example.dmsapplication.worker.SyncWorker
-import com.google.firebase.auth.FirebaseAuth
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 import java.util.concurrent.Executors
 
 class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
-    private val viewModel: HomeViewModel by activityViewModels { HomeViewModelFactory() }
+    // CHUẨN MVVM: Truyền Application vào Factory
+    private val viewModel: HomeViewModel by activityViewModels { HomeViewModelFactory(requireActivity().application) }
+
     private var faceLandmarker: FaceLandmarker? = null
     private var dmsAnalyzer: DmsAnalyzer? = null
     private val cameraExecutor = Executors.newSingleThreadExecutor()
@@ -163,8 +156,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         view.findViewById<SwitchCompat>(R.id.switchVectorHome)
             .setOnCheckedChangeListener { _, isChecked ->
                 isVectorEnabled = isChecked
-
-                // Cập nhật hiển thị ngay lập tức
                 if (isChecked && viewModel.isCameraPreviewEnabled.value) {
                     overlayView.visibility = View.VISIBLE
                 } else {
@@ -205,7 +196,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             viewModel.suggestRest.collect { shouldRest ->
                 if (shouldRest) {
                     Toast.makeText(requireContext(), "Bạn đang rất mệt, hãy dừng xe nghỉ ngơi!", Toast.LENGTH_LONG).show()
-                    // GỌI HÀM PHÁT ÂM THANH MỚI TRONG ALARM HELPER
                     alarmHelper.playRestAlert()
                 }
             }
@@ -245,9 +235,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isMonitoringEnabled.collect { monitoring ->
                 if (!monitoring && !viewModel.isDrowsy.value && !viewModel.isHeadDistracted.value) {
-                    cameraBorder.setCardBackgroundColor(
-                        if (monitoring) Color.GREEN else Color.GRAY
-                    )
+                    cameraBorder.setCardBackgroundColor(if (monitoring) Color.GREEN else Color.GRAY)
                 }
             }
         }
@@ -347,7 +335,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 activity?.runOnUiThread {
                     val wasAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
 
-                    // Gọi hàm onDmsResult đã được cập nhật thêm isYawning
                     viewModel.onDmsResult(isDrowsy, isHeadDistracted, isYawning)
 
                     val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
@@ -396,30 +383,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
     private fun captureAndSave() {
         val bitmap = viewFinder.bitmap ?: return
-        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
-
-        viewLifecycleOwner.lifecycleScope.launch(Dispatchers.IO) {
-            val repository = StatsRepository(requireContext())
-
-            val fileName  = "alert_${System.currentTimeMillis()}"
-            val imagePath = repository.saveImageLocally(bitmap, fileName)
-
-            val stats = DriverStats(
-                userId              = userId,
-                timestamp           = System.currentTimeMillis(),
-                drowsyCount         = viewModel.drowsyCount.value,
-                headDistractedCount = viewModel.headDistractedCount.value,
-                speed               = viewModel.speed.value
-                    .replace("Tốc độ: ", "")
-                    .replace(" km/h", "")
-                    .toFloatOrNull() ?: 0f,
-                localImagePath      = imagePath,
-                isSynced            = false
-            )
-            repository.saveStats(stats)
-
-            SyncWorker.scheduleImmediate(requireContext())
-        }
+        viewModel.saveViolationRecord(bitmap)
     }
 
     override fun onDestroyView() {
@@ -432,4 +396,3 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         crashDetector.stopListening()
     }
 }
-

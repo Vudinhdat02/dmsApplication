@@ -1,16 +1,28 @@
 package com.example.dmsapplication.ui.homeView
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import android.graphics.Bitmap
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.dmsapplication.data.model.DriverStats
 import com.example.dmsapplication.data.repository.AlertRepository
+import com.example.dmsapplication.data.repository.StatsRepository
+import com.example.dmsapplication.worker.SyncWorker
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
-class HomeViewModel : ViewModel() {
+class HomeViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository = StatsRepository(application)
+    private val userId = FirebaseAuth.getInstance().currentUser?.uid ?: ""
+
     private val _isDrowsy = MutableStateFlow(false)
     val isDrowsy = _isDrowsy.asStateFlow()
     private val _drowsyCount = MutableStateFlow(0)
@@ -21,13 +33,11 @@ class HomeViewModel : ViewModel() {
     private val _headDistractedCount = MutableStateFlow(0)
     val headDistractedCount = _headDistractedCount.asStateFlow()
 
-    // BIẾN MỚI: Ngáp ngủ
     private val _isYawning = MutableStateFlow(false)
     val isYawning = _isYawning.asStateFlow()
     private val _yawnCount = MutableStateFlow(0)
     val yawnCount = _yawnCount.asStateFlow()
 
-    // Tín hiệu bắn ra Fragment để phát âm thanh nghỉ ngơi
     private val _suggestRest = MutableSharedFlow<Boolean>()
     val suggestRest = _suggestRest.asSharedFlow()
 
@@ -58,6 +68,31 @@ class HomeViewModel : ViewModel() {
     private val _isCameraPreviewEnabled = MutableStateFlow(true)
     val isCameraPreviewEnabled = _isCameraPreviewEnabled.asStateFlow()
 
+    init {
+        loadInitialStats()
+    }
+
+    private fun loadInitialStats() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val startOfToday = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }.timeInMillis
+
+            try {
+                val list = repository.getRecentStatsByUser(userId).first()
+                val todayRecords = list.filter { it.timestamp >= startOfToday }
+
+                _drowsyCount.value = todayRecords.sumOf { it.drowsyCount }
+                _headDistractedCount.value = todayRecords.sumOf { it.headDistractedCount }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun setCameraPreviewEnabled(enabled: Boolean) {
         _isCameraPreviewEnabled.value = enabled
     }
@@ -70,21 +105,18 @@ class HomeViewModel : ViewModel() {
             return
         }
 
-        // Xử lý nhắm mắt
         val wasDrowsy = _isDrowsy.value
         if (isDrowsy != wasDrowsy) {
             _isDrowsy.value = isDrowsy
             if (isDrowsy) _drowsyCount.value += 1
         }
 
-        // Xử lý quay đầu
         val wasDistracted = _isHeadDistracted.value
         if (isHeadDistracted != wasDistracted) {
             _isHeadDistracted.value = isHeadDistracted
             if (isHeadDistracted) _headDistractedCount.value += 1
         }
 
-        // Xử lý ngáp ngủ
         val wasYawning = _isYawning.value
         if (isYawning != wasYawning) {
             _isYawning.value = isYawning
@@ -146,7 +178,6 @@ class HomeViewModel : ViewModel() {
 
         viewModelScope.launch(Dispatchers.IO) {
             val isSuccess = alertRepository.sendCrashAlert(mapLink)
-
             if (isSuccess) {
                 _alertMessage.emit("Đã gửi Email cảnh báo thành công!")
             } else {
@@ -155,7 +186,7 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun setCalibrated(value: Boolean)          { _isCalibrated.value = value }
+    fun setCalibrated(value: Boolean) { _isCalibrated.value = value }
 
     fun resetStats() {
         _drowsyCount.value         = 0
@@ -164,5 +195,35 @@ class HomeViewModel : ViewModel() {
         _isDrowsy.value            = false
         _isHeadDistracted.value    = false
         _isYawning.value           = false
+    }
+
+    // CHUẨN MVVM: ViewModel trực tiếp xử lý việc lưu trữ thay vì Fragment
+    fun saveViolationRecord(bitmap: Bitmap) {
+        if (userId.isEmpty()) return
+
+        val currentDrowsyCount = if (_isDrowsy.value) 1 else 0
+        val currentHeadDistractedCount = if (_isHeadDistracted.value) 1 else 0
+        val currentSpeed = _speed.value
+            .replace("Tốc độ: ", "")
+            .replace(" km/h", "")
+            .toFloatOrNull() ?: 0f
+
+        viewModelScope.launch(Dispatchers.IO) {
+            val fileName = "alert_${System.currentTimeMillis()}"
+            val imagePath = repository.saveImageLocally(bitmap, fileName)
+
+            val stats = DriverStats(
+                userId = userId,
+                timestamp = System.currentTimeMillis(),
+                drowsyCount = currentDrowsyCount,
+                headDistractedCount = currentHeadDistractedCount,
+                speed = currentSpeed,
+                localImagePath = imagePath,
+                isSynced = false
+            )
+            repository.saveStats(stats)
+
+            SyncWorker.scheduleImmediate(getApplication())
+        }
     }
 }

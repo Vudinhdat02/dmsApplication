@@ -19,6 +19,39 @@
         app:layout_constraintTop_toTopOf="parent"
         android:layout_marginTop="30dp"/>
 
+    <LinearLayout
+        android:id="@+id/layoutFilter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingBottom="10dp"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toBottomOf="@id/tvHeader">
+
+        <TextView
+            android:id="@+id/tvTotalStats"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Tổng: \nQuay đầu: 0\nNhắm mắt: 0"
+            android:textColor="#555555"
+            android:textSize="14sp"
+            android:textStyle="bold"/>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectDate"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Hôm nay"
+            android:textColor="#00BCD4"
+            app:strokeColor="#00BCD4"
+            app:cornerRadius="8dp"
+            app:icon="@drawable/ic_calendar"
+            app:iconTint="#00BCD4"/>
+    </LinearLayout>
+
     <TextView
         android:id="@+id/tvEmpty"
         android:layout_width="wrap_content"
@@ -27,7 +60,7 @@
         android:textColor="#AAAAAA"
         android:textSize="16sp"
         android:visibility="gone"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader"
+        app:layout_constraintTop_toBottomOf="@id/layoutFilter"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -38,7 +71,7 @@
         android:layout_height="0dp"
         android:paddingVertical="8dp"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@id/tvHeader"
+        app:layout_constraintTop_toBottomOf="@id/layoutFilter"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

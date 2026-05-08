@@ -4,16 +4,14 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import kotlin.math.sqrt
 
 /**
- * Tính góc đầu (yaw, pitch) từ landmark khuôn mặt MediaPipe.
+ * Tính góc đầu (yaw, pitch) sử dụng trục Z (độ sâu) của MediaPipe 3D Mesh.
  *
- * YAW  (xoay trái/phải): dùng asymmetry ratio khoảng cách mũi–mắt
- * PITCH (cúi/ngẩng)     : dùng tỉ lệ động nose-to-eye / eye-to-chin
- *                         KHÔNG dùng hằng số cứng → chuẩn với mọi người
+ * YAW   (quay trái/phải): Chênh lệch độ sâu giữa mắt trái và mắt phải.
+ * PITCH (cúi/ngẩng)     : Chênh lệch độ sâu giữa Trán và Chóp mũi.
+ *                         (TUYỆT ĐỐI KHÔNG dùng cằm để tránh nhiễu khi ngáp/nói chuyện).
  *
- * Giá trị trả về đã chuẩn hoá:
- *   yaw   > 0 → quay phải  | yaw   < 0 → quay trái
- *   pitch > 0 → cúi xuống  | pitch < 0 → ngẩng lên
- *   Cả hai đều = 0.0 khi nhìn thẳng (sau calibration)
+ * Việc sử dụng trục Z giúp thuật toán miễn nhiễm hoàn toàn với việc nghiêng đầu (Roll)
+ * hoặc dịch chuyển tịnh tiến khuôn mặt trước camera.
  */
 object HeadPoseEstimator {
 
@@ -22,57 +20,35 @@ object HeadPoseEstimator {
     fun estimate(landmarks: List<NormalizedLandmark>): HeadAngles? {
         if (landmarks.size < 468) return null
 
-        val noseTip  = landmarks[1]
-        val chin     = landmarks[152]
-        val leftEye  = landmarks[33]
-        val rightEye = landmarks[263]
+        val leftEye  = landmarks[33]   // Mép ngoài mắt trái
+        val rightEye = landmarks[263]  // Mép ngoài mắt phải
+        val forehead = landmarks[10]   // Đỉnh trán
+        val noseTip  = landmarks[1]    // Chóp mũi
 
-        // ── YAW ───────────────────────────────────────────────────────────
-        val faceWidth = dist(leftEye, rightEye)
-        if (faceWidth < 0.01f) return null
+        // Tính khoảng cách 2D làm gốc chuẩn hoá
+        // (Để tỷ lệ không bị ảnh hưởng khi mặt tiến lại gần hay lùi xa camera)
+        val faceWidth = distXY(leftEye.x(), leftEye.y(), rightEye.x(), rightEye.y())
+        val faceHeight = distXY(forehead.x(), forehead.y(), noseTip.x(), noseTip.y())
 
-        // Khi quay phải: mũi gần mắt phải hơn → distLeft > distRight → yaw > 0
-        val distLeft  = dist(noseTip, leftEye)
-        val distRight = dist(noseTip, rightEye)
-        val yaw = (distLeft - distRight) / faceWidth
+        if (faceWidth < 0.01f || faceHeight < 0.01f) return null
 
-        // ── PITCH ─────────────────────────────────────────────────────────
-        // Dùng tỉ lệ: noseToEye / totalFaceHeight
-        // Khi nhìn thẳng: tỉ lệ này ≈ 0.45 (mũi nằm gần giữa mắt–cằm)
-        // Khi cúi: mũi đi xuống → tỉ lệ tăng
-        // Khi ngẩng: mũi đi lên → tỉ lệ giảm
-        // Để pitch = 0 khi thẳng → trừ đi giá trị trung bình thực tế
-        // Thay vì hằng số cứng 0.40, dùng tỉ lệ giữa 2 khoảng cách:
-        //   ratio = dist(nose, eyeMid) / dist(nose, chin)
-        // Khi thẳng: ratio ≈ 0.55 (mũi gần mắt hơn cằm)
-        // Khi cúi:   ratio giảm (mũi xa mắt hơn)
-        // Khi ngẩng: ratio tăng (mũi gần mắt hơn)
+        // 1. YAW (Quay trái/phải)
+        // Khi quay mặt, một mắt sẽ tiến gần camera hơn (Z âm hơn), mắt kia lùi xa hơn (Z dương hơn).
+        // Nghiêng đầu (áp tai vào vai) không làm thay đổi độ sâu Z của 2 mắt.
+        val yaw = (leftEye.z() - rightEye.z()) / faceWidth
 
-        val eyeMidX = (leftEye.x() + rightEye.x()) / 2f
-        val eyeMidY = (leftEye.y() + rightEye.y()) / 2f
-
-        val noseToEye  = distXY(noseTip.x(), noseTip.y(), eyeMidX, eyeMidY)
-        val noseToChin = distXY(noseTip.x(), noseTip.y(), chin.x(), chin.y())
-
-        if (noseToChin < 0.01f) return null
-
-        // ratio > 0.55 → ngẩng (pitch âm), ratio < 0.55 → cúi (pitch dương)
-        // Đảo dấu để: cúi → pitch dương
-        val pitchRatio = noseToEye / noseToChin
-        val pitch = 0.55f - pitchRatio   // = 0 khi thẳng, >0 khi cúi, <0 khi ngẩng
+        // 2. PITCH (Cúi/Ngửa)
+        // Khi cúi, trán tiến gần camera hơn chóp mũi.
+        // Khi ngửa, chóp mũi tiến gần camera hơn trán.
+        // Trán và Mũi là xương cứng, há miệng ngáp không làm thay đổi khoảng cách này.
+        val pitch = (forehead.z() - noseTip.z()) / faceHeight
 
         return HeadAngles(yaw = yaw, pitch = pitch)
-    }
-
-    private fun dist(a: NormalizedLandmark, b: NormalizedLandmark): Float {
-        val dx = a.x() - b.x()
-        val dy = a.y() - b.y()
-        return sqrt(dx * dx + dy * dy)
     }
 
     private fun distXY(x1: Float, y1: Float, x2: Float, y2: Float): Float {
         val dx = x1 - x2
         val dy = y1 - y2
-        return sqrt(dx * dx + dy * dy)
+        return sqrt((dx * dx + dy * dy).toDouble()).toFloat()
     }
 }

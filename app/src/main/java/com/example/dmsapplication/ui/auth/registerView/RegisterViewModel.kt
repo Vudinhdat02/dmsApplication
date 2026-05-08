@@ -1,4 +1,4 @@
-package com.example.dmsapplication.ui.register.ui.auth.registerView
+package com.example.dmsapplication.ui.auth.registerView
 
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
