@@ -131,6 +131,7 @@
                         \n- Cảnh báo âm thanh khi phát hiện nguy hiểm
                         \n- Theo dõi tốc độ qua GPS
                         \n- Xem lịch sử mất tập trung
+                        \n- Gửi cảnh báo kèm định vị qua email người thân
                         \n- Giao diện đơn giản, dễ sử dụng"
                         android:textColor="#555555"
                         android:lineSpacingMultiplier="1.8" />
@@ -193,7 +194,8 @@
                         android:text="Sinh viên: Vũ Đình Đạt (DatDev)
                         \nMã sinh viên: DTC225180062
                         \nLớp: KTPM K21A (Khóa 21: 2022 - 2027)
-                        \nTrường Đại Học Công Nghệ Thông Tin Và Truyền Thông - Đại Học Thái Nguyên
+                        \nTrường ĐH Công Nghệ Thông Tin Và Truyền Thông
+                        \nĐại Học Thái Nguyên
                         \nEmail: vudinhdat02@gmail.com
                         \nSĐT: 0332465590"
                         android:textColor="#555555"

@@ -2,12 +2,9 @@ package com.example.dmsapplication.ui.dashboardView
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.dmsapplication.data.model.DriverStats
 import com.example.dmsapplication.data.repository.StatsRepository
-import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,14 +32,29 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
     private val _totalHead = MutableStateFlow(0)
     val totalHead: StateFlow<Int> = _totalHead.asStateFlow()
 
-    private val _aiInsight = MutableStateFlow("Đang phân tích dữ liệu lái xe của bạn...")
+    // Giữ nguyên nội dung AI cũ, không tự xóa khi load lại data
+    private val _aiInsight = MutableStateFlow("Nhấn nút bên dưới để nhận phân tích từ AI.")
     val aiInsight: StateFlow<String> = _aiInsight.asStateFlow()
 
+    // Trạng thái loading của nút AI
+    private val _isAiLoading = MutableStateFlow(false)
+    val isAiLoading: StateFlow<Boolean> = _isAiLoading.asStateFlow()
+
+    // Lưu snapshot số liệu mới nhất để dùng khi người dùng bấm nút
+    private var latestDailyScore = 100
+    private var latestTodayErrors = 0
+    private var latestMorningErrors = 0
+    private var latestAfternoonErrors = 0
+    private var latestEveningErrors = 0
+    private var latestNightErrors = 0
+    private var latestHighSpeedErrors = 0
+
     init {
-        loadAndAnalyzeData()
+        loadData()
     }
 
-    private fun loadAndAnalyzeData() {
+    // Chỉ load dữ liệu thống kê, KHÔNG gọi AI
+    private fun loadData() {
         viewModelScope.launch(Dispatchers.IO) {
             repository.getRecentStatsByUser(userId).collect { statsList ->
                 processStats(statsList)
@@ -56,13 +68,13 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         var totalHeadWeek = 0
 
         var todayErrors = 0
-        var totalPenalty = 0 // Tổng điểm trừ dựa trên GPS
+        var totalPenalty = 0
 
-        var morningErrors = 0   // 6h - 12h
-        var afternoonErrors = 0 // 12h - 18h
-        var eveningErrors = 0   // 18h - 24h
-        var nightErrors = 0     // 0h - 6h
-        var highSpeedErrors = 0 // > 60km/h
+        var morningErrors = 0
+        var afternoonErrors = 0
+        var eveningErrors = 0
+        var nightErrors = 0
+        var highSpeedErrors = 0
 
         val todayCalendar = Calendar.getInstance()
 
@@ -78,24 +90,25 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
             weekCounts[index] += currentErrors.toFloat()
 
             if (statCalendar.get(Calendar.YEAR) == todayCalendar.get(Calendar.YEAR) &&
-                statCalendar.get(Calendar.DAY_OF_YEAR) == todayCalendar.get(Calendar.DAY_OF_YEAR) && currentErrors > 0) {
-
+                statCalendar.get(Calendar.DAY_OF_YEAR) == todayCalendar.get(Calendar.DAY_OF_YEAR) &&
+                currentErrors > 0
+            ) {
                 todayErrors += currentErrors
 
                 when (statCalendar.get(Calendar.HOUR_OF_DAY)) {
-                    in 6..11 -> morningErrors += currentErrors
+                    in 6..11  -> morningErrors   += currentErrors
                     in 12..17 -> afternoonErrors += currentErrors
-                    in 18..23 -> eveningErrors += currentErrors
-                    else -> nightErrors += currentErrors
+                    in 18..23 -> eveningErrors   += currentErrors
+                    else      -> nightErrors     += currentErrors
                 }
 
                 if (stat.speed >= 60f) {
                     highSpeedErrors += currentErrors
-                    totalPenalty += (currentErrors * 5) // Chạy nhanh mà xao nhãng -> Trừ 5 điểm/lỗi
+                    totalPenalty += (currentErrors * 5)
                 } else if (stat.speed >= 30f) {
-                    totalPenalty += (currentErrors * 3) // Tốc độ trung bình -> Trừ 3 điểm/lỗi
+                    totalPenalty += (currentErrors * 3)
                 } else {
-                    totalPenalty += (currentErrors * 1) // Tốc độ thấp (đèn đỏ, tắc đường) -> Trừ 1 điểm/lỗi
+                    totalPenalty += (currentErrors * 1)
                 }
             }
         }
@@ -107,13 +120,39 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         val dailyScore = (100 - totalPenalty).coerceIn(0, 100)
         _safetyScore.value = dailyScore
 
-        generateAiInsight(dailyScore, todayErrors, morningErrors, afternoonErrors, eveningErrors, nightErrors, highSpeedErrors)
+        // Lưu lại snapshot số liệu mới nhất, chờ người dùng bấm nút
+        latestDailyScore     = dailyScore
+        latestTodayErrors    = todayErrors
+        latestMorningErrors  = morningErrors
+        latestAfternoonErrors = afternoonErrors
+        latestEveningErrors  = eveningErrors
+        latestNightErrors    = nightErrors
+        latestHighSpeedErrors = highSpeedErrors
+    }
+
+    // Hàm này được gọi từ Fragment khi người dùng BẤM NÚT
+    fun requestAiAnalysis() {
+        if (_isAiLoading.value) return // Tránh bấm nhiều lần liên tiếp
+        viewModelScope.launch(Dispatchers.IO) {
+            generateAiInsight(
+                latestDailyScore,
+                latestTodayErrors,
+                latestMorningErrors,
+                latestAfternoonErrors,
+                latestEveningErrors,
+                latestNightErrors,
+                latestHighSpeedErrors
+            )
+        }
     }
 
     private suspend fun generateAiInsight(
         dailyScore: Int, todayErrors: Int,
         morning: Int, afternoon: Int, evening: Int, night: Int, highSpeed: Int
     ) {
+        _isAiLoading.value = true
+        _aiInsight.value = "Đang phân tích dữ liệu lái xe của bạn..."
+
         try {
             val retrofit = Retrofit.Builder()
                 .baseUrl("https://api.groq.com/openai/")
@@ -150,6 +189,8 @@ class DashboardViewModel(application: Application) : AndroidViewModel(applicatio
         } catch (e: Exception) {
             android.util.Log.e("GroqDebug", "Lỗi Groq: ${e.message}")
             _aiInsight.value = "Hệ thống AI đang nghỉ ngơi một chút. Hãy luôn tập trung lái xe nhé!"
+        } finally {
+            _isAiLoading.value = false
         }
     }
 }

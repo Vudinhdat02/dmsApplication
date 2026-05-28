@@ -35,8 +35,13 @@ android {
             properties.load(FileInputStream(localPropertiesFile))
         }
 
-        buildConfigField("String", "BREVO_API_KEY", "\"${properties.getProperty("BREVO_API_KEY")}\"")
-        buildConfigField("String", "GROQ_API_KEY", "\"${properties.getProperty("GROQ_API_KEY")}\"")    }
+        buildConfigField("String", "BREVO_API_KEY",           "\"${properties.getProperty("BREVO_API_KEY")}\"")
+        buildConfigField("String", "GROQ_API_KEY",            "\"${properties.getProperty("GROQ_API_KEY")}\"")
+        buildConfigField("String", "CLOUDINARY_CLOUD_NAME",   "\"${properties.getProperty("CLOUDINARY_CLOUD_NAME")}\"")
+        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET","\"${properties.getProperty("CLOUDINARY_UPLOAD_PRESET")}\"")
+        buildConfigField("String", "CLOUDINARY_API_KEY",      "\"${properties.getProperty("CLOUDINARY_API_KEY")}\"")
+        buildConfigField("String", "CLOUDINARY_API_SECRET",   "\"${properties.getProperty("CLOUDINARY_API_SECRET")}\"")
+    }
 
     buildTypes {
         release {
@@ -77,7 +82,7 @@ dependencies {
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage:20.3.0")
-    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     // Google Play Services
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
@@ -116,15 +121,6 @@ dependencies {
 
     // Thư viện Google Gemini AI
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-
-    // TESTING
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
 
     // Khác
     implementation("androidx.work:work-runtime-ktx:2.9.0")

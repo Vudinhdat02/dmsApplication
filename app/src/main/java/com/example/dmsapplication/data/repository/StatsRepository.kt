@@ -116,11 +116,14 @@ class StatsRepository(private val context: Context) {
                 val publicId = extractPublicId(stats.cloudImageUrl)
                 if (publicId.isNotEmpty()) {
                     try {
+                        // MỚI - có timestamp
+                        val (timestamp, signature) = CloudinaryService.generateSignature(publicId)
                         CloudinaryService.api.deleteImage(
                             cloudName  = CloudinaryService.CLOUD_NAME,
                             publicId   = publicId,
                             apiKey     = CloudinaryService.API_KEY,
-                            signature  = CloudinaryService.generateSignature(publicId)
+                            timestamp  = timestamp,
+                            signature  = signature
                         )
                     } catch (e: Exception) { Log.e("CLEANUP", "Lỗi Cloudinary: ${e.message}") }
                 }

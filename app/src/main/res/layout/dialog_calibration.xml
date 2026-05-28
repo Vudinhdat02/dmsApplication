@@ -28,7 +28,7 @@
         android:id="@+id/tvCalibrationDesc"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Đặt điện thoại cố định trên táp lô (góc bất kỳ), ngồi đúng tư thế lái xe, nhìn thẳng về phía trước rồi nhấn &quot;Bắt đầu ngay&quot;."
+        android:text="Đặt điện thoại cố định trên táp lô hoặc góc bất kỳ, ngồi đúng tư thế lái xe, nhìn thẳng về phía trước rồi nhấn &quot;Bắt đầu ngay&quot;."
         android:textAlignment="center"
         android:layout_marginTop="12dp"
         android:textSize="15sp"

@@ -12,7 +12,9 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.dmsapplication.R
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.progressindicator.CircularProgressIndicator
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -21,6 +23,9 @@ class DashboardFragment : Fragment() {
     private val viewModel: DashboardViewModel by viewModels {
         DashboardViewModelFactory(requireActivity().application)
     }
+
+    // Khai báo đúng chỗ: bên trong class
+    private var typeWriteJob: Job? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -32,12 +37,13 @@ class DashboardFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val tvScore = view.findViewById<TextView>(R.id.tvSafetyScore)
+        val tvScore       = view.findViewById<TextView>(R.id.tvSafetyScore)
         val progressScore = view.findViewById<CircularProgressIndicator>(R.id.progressScore)
-        val tvStatus = view.findViewById<TextView>(R.id.tvScoreStatus)
-        val tvAiInsight = view.findViewById<TextView>(R.id.tvAiInsight)
+        val tvStatus      = view.findViewById<TextView>(R.id.tvScoreStatus)
+        val tvAiInsight   = view.findViewById<TextView>(R.id.tvAiInsight)
         val tvTotalDrowsy = view.findViewById<TextView>(R.id.tvTotalDrowsy)
-        val tvTotalHead = view.findViewById<TextView>(R.id.tvTotalHead)
+        val tvTotalHead   = view.findViewById<TextView>(R.id.tvTotalHead)
+        val btnRequestAi  = view.findViewById<MaterialButton>(R.id.btnRequestAi)
 
         val bars = listOf(
             view.findViewById<View>(R.id.barT2), view.findViewById<View>(R.id.barT3),
@@ -55,26 +61,22 @@ class DashboardFragment : Fragment() {
         // 1. ANIMATION VÒNG TRÒN ĐIỂM SỐ
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.safetyScore.collect { score ->
-
-                // Quyết định màu sắc dựa trên điểm
                 val colorString = when {
                     score >= 80 -> "#4CAF50"
                     score >= 50 -> "#FF9800"
-                    else -> "#EF4444"
+                    else        -> "#EF4444"
                 }
                 val parsedColor = Color.parseColor(colorString)
 
-                // Cập nhật chữ trạng thái
                 tvStatus.text = when {
                     score >= 80 -> "Trạng thái: Rất Tốt"
                     score >= 50 -> "Trạng thái: Cần chú ý"
-                    else -> "Trạng thái: Nguy hiểm"
+                    else        -> "Trạng thái: Nguy hiểm"
                 }
                 tvStatus.setTextColor(parsedColor)
                 tvScore.setTextColor(parsedColor)
                 progressScore.setIndicatorColor(parsedColor)
 
-                // Hiệu ứng chạy từ 0 -> Điểm thực tế trong 1.5 giây
                 val animator = ValueAnimator.ofInt(0, score)
                 animator.duration = 1500
                 animator.addUpdateListener { animation ->
@@ -86,14 +88,30 @@ class DashboardFragment : Fragment() {
             }
         }
 
-        // 2. ANIMATION GÕ CHỮ CHO TRỢ LÝ AI
+        // 2. HIỂN THỊ NỘI DUNG AI — dùng typeWriteJob để cancel cái cũ trước khi chạy cái mới
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.aiInsight.collect { insight ->
-                // Gọi hàm mở rộng typeWrite để tạo hiệu ứng
-                tvAiInsight.typeWrite(insight)
+                typeWriteJob?.cancel()
+                typeWriteJob = viewLifecycleOwner.lifecycleScope.launch {
+                    tvAiInsight.typeWrite(insight)
+                }
             }
         }
 
+        // 3. TRẠNG THÁI NÚT AI (loading hay không)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isAiLoading.collect { isLoading ->
+                btnRequestAi.isEnabled = !isLoading
+                btnRequestAi.text = if (isLoading) "Đang phân tích..." else "Phân tích và nhận gợi ý AI"
+            }
+        }
+
+        // 4. SỰ KIỆN BẤM NÚT — chỉ gọi requestAiAnalysis, không collect gì thêm ở đây
+        btnRequestAi.setOnClickListener {
+            viewModel.requestAiAnalysis()
+        }
+
+        // 5. TỔNG SỐ LỖI TUẦN
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.totalDrowsy.collect { tvTotalDrowsy.text = it.toString() }
         }
@@ -102,12 +120,11 @@ class DashboardFragment : Fragment() {
             viewModel.totalHead.collect { tvTotalHead.text = it.toString() }
         }
 
-        // 3. XỬ LÝ DỮ LIỆU BIỂU ĐỒ CỘT
+        // 6. BIỂU ĐỒ CỘT
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.weeklyData.collect { weekData ->
                 val maxError = weekData.maxOrNull() ?: 1f
                 val scaleFactor = if (maxError > 0) 100f / maxError else 0f
-
                 for (i in weekData.indices) {
                     val percentage = weekData[i] * scaleFactor
                     updateNativeBarChart(bars[i], spaces[i], percentage)
@@ -117,17 +134,16 @@ class DashboardFragment : Fragment() {
     }
 
     private suspend fun TextView.typeWrite(text: String, delayMs: Long = 15) {
-        this.text = "" // Xóa sạch chữ "Đang tải dữ liệu..." cũ
+        this.text = ""
         for (char in text) {
             this.append(char.toString())
-            delay(delayMs) // Nghỉ 15ms trước khi gõ chữ tiếp theo
+            delay(delayMs)
         }
     }
 
     private fun updateNativeBarChart(barView: View, spaceView: View, targetPercentage: Float) {
         val safePercent = targetPercentage.coerceIn(0f, 100f)
 
-        // Nếu điểm bằng 0 thì không cần chạy animation
         if (safePercent == 0f) {
             barView.post {
                 val spaceParams = spaceView.layoutParams as LinearLayout.LayoutParams
@@ -141,12 +157,10 @@ class DashboardFragment : Fragment() {
             return
         }
 
-        // Chạy hiệu ứng mọc lên từ 0 -> phần trăm mục tiêu trong 1 giây
         val animator = ValueAnimator.ofFloat(0f, safePercent)
         animator.duration = 1000
         animator.addUpdateListener { animation ->
             val currentVal = animation.animatedValue as Float
-
             barView.post {
                 val spaceParams = spaceView.layoutParams as LinearLayout.LayoutParams
                 spaceParams.weight = 100f - currentVal
