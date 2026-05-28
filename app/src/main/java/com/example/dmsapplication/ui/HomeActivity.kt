@@ -72,6 +72,7 @@ class HomeActivity : AppCompatActivity() {
 
     private fun switchFragment(targetFragment: Fragment) {
         if (activeFragment == targetFragment) return
+        supportFragmentManager.popBackStack(null, androidx.fragment.app.FragmentManager.POP_BACK_STACK_INCLUSIVE)
 
         supportFragmentManager.beginTransaction()
             .hide(activeFragment)
