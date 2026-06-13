@@ -19,22 +19,16 @@ class DmsAnalyzer(
 
     var isSunglassesMode: Boolean = false
     var isYawnMode: Boolean = true
-
     // Ngưỡng nhắm mắt
     private val EAR_THRESHOLD         = 0.16f
     private val SMOOTH_WINDOW         = 3
     private val MOUTH_WIDTH_THRESHOLD = 0.5f
-    private val EYE_CLOSED_DURATION   = 1000L
-
-    // Ngưỡng quay đầu
+    private val EYE_CLOSED_DURATION   = 800L
+    //ngưỡng quay đầu
     private val HEAD_DISTRACTED_DURATION = 1000L
-
-    /**
-     * Thời gian tối đa cho phép mất khuôn mặt trước khi cảnh báo "quay đầu".
-     * Nếu mất mặt NGẮN hơn mốc này → đang quay đầu nhanh → cảnh báo.
-     * Nếu mất mặt DÀI hơn mốc này  → người dùng có thể rời đi → tắt cảnh báo.
-     */
+    //Nếu mất mặt NGẮN hơn mốc này → đang quay đầu nhanh → cảnh báo.
     private val FACE_LOST_ALERT_DURATION   = 800L
+    //Nếu mất mặt DÀI hơn mốc này  → người dùng có thể rời đi → tắt cảnh báo.
     private val FACE_LOST_SILENCE_DURATION = 5000L
 
     // Ngưỡng ngáp ngủ
@@ -42,12 +36,10 @@ class DmsAnalyzer(
     private val YAWN_DURATION = 800L
     private val YAWN_COOLDOWN = 3000L
 
-    // Landmark indices
     private val LEFT_EYE_INDICES  = listOf(362, 385, 387, 263, 373, 380)
     private val RIGHT_EYE_INDICES = listOf(33,  160, 158, 133, 153, 144)
     private val MOUTH_LEFT  = 61
     private val MOUTH_RIGHT = 291
-
     private val INNER_LIP_TOP    = 13
     private val INNER_LIP_BOTTOM = 14
     private val INNER_MOUTH_LEFT = 78
@@ -72,15 +64,13 @@ class DmsAnalyzer(
         val bitmap  = imageProxy.toBitmap()
         val mpImage = BitmapImageBuilder(bitmap).build()
         val nowMs   = System.currentTimeMillis()
-
+        //AI Facelandmarker xử lý ảnh
         val result = faceLandmarker.detectForVideo(mpImage, nowMs)
 
         if (result.faceLandmarks().isNotEmpty()) {
             // Khuôn mặt được phát hiện → reset bộ đếm mất mặt
             faceLostStartTime = 0L
-
             val landmarks = result.faceLandmarks()[0]
-
             // 1. EAR — nhắm mắt
             val leftPts  = LEFT_EYE_INDICES.map  { landmarks[it] }
             val rightPts = RIGHT_EYE_INDICES.map { landmarks[it] }
@@ -129,7 +119,7 @@ class DmsAnalyzer(
                 isHeadAlerting          = false
             }
 
-            // ── State machine ngáp
+            // State machine ngáp
             if (isYawningNow) {
                 if (yawnStartTime == 0L) yawnStartTime = nowMs
                 if (nowMs - yawnStartTime >= YAWN_DURATION && nowMs - lastYawnTime > YAWN_COOLDOWN) {
@@ -148,32 +138,26 @@ class DmsAnalyzer(
         } else {
             // Không phát hiện khuôn mặt
             resetEyeAndYawnState()
-
             // Chỉ áp dụng logic "mất mặt = quay đầu" khi đã calibrate
             if (calibrationManager.isCalibrated) {
                 if (faceLostStartTime == 0L) faceLostStartTime = nowMs
                 val faceLostMs = nowMs - faceLostStartTime
-
                 isHeadAlerting = when {
                     // Vừa mất mặt, chưa đủ ngưỡng thời gian → chưa cảnh báo
                     faceLostMs < FACE_LOST_ALERT_DURATION   -> false
-
                     // Mất mặt trong khoảng cảnh báo → đang quay đầu
                     faceLostMs < FACE_LOST_SILENCE_DURATION -> true
-
                     // Mất mặt quá lâu → người dùng rời đi, im lặng
                     else                                    -> false
                 }
                 // Giữ nguyên headDistractedStartTime = 0 vì không cần dùng ở nhánh này
                 headDistractedStartTime = 0L
-
                 onResults(false, isHeadAlerting, false, null)
             } else {
                 resetAll()
                 onResults(false, false, false, null)
             }
         }
-
         imageProxy.close()
     }
 

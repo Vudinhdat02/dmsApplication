@@ -4,15 +4,6 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.google.firebase.auth.FirebaseAuth
 import kotlin.math.abs
-
-/**
- * Lưu và so sánh góc đầu chuẩn (baseline) sau khi người dùng calibrate.
- * Dữ liệu được lưu riêng biệt cho từng người dùng dựa trên Firebase UID.
- *
- * Ngưỡng phát hiện lệch mới (sử dụng công thức Z-Depth):
- *   YAW_THRESHOLD  : 0.20f (~ cho phép quay góc khoảng 15-20 độ)
- *   PITCH_THRESHOLD: 0.25f (~ cho phép cúi/ngẩng góc khoảng 15-20 độ)
- */
 class CalibrationManager(context: Context) {
 
     companion object {

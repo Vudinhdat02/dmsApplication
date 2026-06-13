@@ -32,7 +32,10 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), Pair(0, 0))
 
     init {
-        fetchHistoryFromCloud()
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteOldCloudImages(userId)
+            repository.refreshStatsFromCloud(userId)
+        }
     }
 
     fun setSelectedDate(timestamp: Long) {
@@ -50,9 +53,4 @@ class HistoryViewModel(application: Application) : AndroidViewModel(application)
         return cal.timeInMillis
     }
 
-    fun fetchHistoryFromCloud() {
-        viewModelScope.launch(Dispatchers.IO) {
-            repository.refreshStatsFromCloud(userId)
-        }
-    }
 }

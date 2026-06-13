@@ -40,9 +40,9 @@ interface CloudinaryApi {
 }
 
 object CloudinaryService {
-    val CLOUD_NAME: String         = BuildConfig.CLOUDINARY_CLOUD_NAME
-    val UPLOAD_PRESET: String      = BuildConfig.CLOUDINARY_UPLOAD_PRESET
-    val API_KEY: String            = BuildConfig.CLOUDINARY_API_KEY
+    val CLOUD_NAME: String = BuildConfig.CLOUDINARY_CLOUD_NAME
+    val UPLOAD_PRESET: String = BuildConfig.CLOUDINARY_UPLOAD_PRESET
+    val API_KEY: String = BuildConfig.CLOUDINARY_API_KEY
     private val API_SECRET: String = BuildConfig.CLOUDINARY_API_SECRET
 
     private val retrofit = Retrofit.Builder()

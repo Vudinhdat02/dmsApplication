@@ -12,7 +12,6 @@ interface StatsDao {
     suspend fun update(stats: DriverStats)
     @Delete
     suspend fun delete(stats: DriverStats)
-    // Lấy 2 ngày gần nhất theo user
     @Query("SELECT * FROM driver_stats WHERE userId = :userId AND timestamp >= :since ORDER BY timestamp DESC")
     fun getRecentByUser(userId: String, since: Long): Flow<List<DriverStats>>
     // Lấy các bản ghi cũ hơn 2 ngày đã sync (để xóa)

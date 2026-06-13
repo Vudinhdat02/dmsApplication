@@ -93,7 +93,7 @@ class StatsRepository(private val context: Context) {
 
     private suspend fun saveToFirestore(stats: DriverStats): Boolean {
         return try {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val db = FirebaseFirestore.getInstance()
             // Tạo một Document ID duy nhất bằng userId + timestamp
             val docId = "${stats.userId}_${stats.timestamp}"
             db.collection("driver_stats")
@@ -155,7 +155,7 @@ class StatsRepository(private val context: Context) {
 
     suspend fun fetchFromCloud(userId: String) {
         try {
-            val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+            val db = FirebaseFirestore.getInstance()
             val snapshot = db.collection("driver_stats")
                 .whereEqualTo("userId", userId)
                 .get()

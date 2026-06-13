@@ -197,7 +197,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isYawning.value           = false
     }
 
-    // CHUẨN MVVM: ViewModel trực tiếp xử lý việc lưu trữ thay vì Fragment
     fun saveViolationRecord(bitmap: Bitmap) {
         if (userId.isEmpty()) return
 
