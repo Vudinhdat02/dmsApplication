@@ -5,7 +5,7 @@ import kotlin.math.sqrt
 
 /**
  * Tính toán độ mở của miệng (Mouth Aspect Ratio - MAR) để nhận diện ngáp.
- * ĐÃ NÂNG CẤP: Sử dụng khoảng cách 3D (X, Y, Z) để tránh sai số khi tài xế hơi quay đầu.
+ * Sử dụng khoảng cách 3D (X, Y, Z) để tránh sai số khi tài xế hơi quay đầu.
  */
 object MarCalculator {
 

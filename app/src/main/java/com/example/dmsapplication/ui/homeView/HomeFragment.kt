@@ -9,6 +9,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +38,9 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import kotlinx.coroutines.launch
+import java.util.Locale
 import java.util.concurrent.Executors
+import kotlin.math.roundToInt
 
 class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
@@ -60,6 +63,8 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var tvDrowsyCount: TextView
     private lateinit var tvHeadCount: TextView
     private lateinit var tvYawnCount: TextView
+    private lateinit var seekEyeThreshold: SeekBar
+    private lateinit var tvEyeThresholdValue: TextView
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
     private var isVectorEnabled = false
     private val handler = Handler(Looper.getMainLooper())
@@ -120,6 +125,8 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         cameraBorder  = view.findViewById(R.id.cameraBorder)
         tvSpeedNumber = view.findViewById(R.id.tvSpeedNumber)
         pbSpeed       = view.findViewById(R.id.pbSpeed)
+        seekEyeThreshold = view.findViewById(R.id.seekEyeThreshold)
+        tvEyeThresholdValue = view.findViewById(R.id.tvEyeThresholdValue)
         cameraBorder.setCardBackgroundColor(Color.GREEN)
         viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
 
@@ -147,6 +154,21 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         view.findViewById<View>(R.id.btnRecalibrate).setOnClickListener {
             showCalibrationDialog()
         }
+
+        seekEyeThreshold.max = ((DmsAnalyzer.MAX_EAR_THRESHOLD - DmsAnalyzer.MIN_EAR_THRESHOLD) * 100).roundToInt()
+        seekEyeThreshold.progress = thresholdToProgress(viewModel.earThreshold.value)
+        updateEyeThresholdText(viewModel.earThreshold.value)
+        seekEyeThreshold.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    viewModel.setEarThreshold(progressToThreshold(progress))
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
+        })
 
         view.findViewById<SwitchCompat>(R.id.switchCameraPreview)
             .setOnCheckedChangeListener { _, isChecked ->
@@ -253,6 +275,19 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.earThreshold.collect { threshold ->
+                dmsAnalyzer?.earThreshold = threshold
+                if (::seekEyeThreshold.isInitialized) {
+                    val progress = thresholdToProgress(threshold)
+                    if (seekEyeThreshold.progress != progress) {
+                        seekEyeThreshold.progress = progress
+                    }
+                    updateEyeThresholdText(threshold)
+                }
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isCameraPreviewEnabled.collect { isEnabled ->
                 if (isEnabled) {
                     viewFinder.visibility = View.VISIBLE
@@ -271,6 +306,19 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
         cameraBorder.setCardBackgroundColor(if (isAlert) Color.RED else Color.GREEN)
         if (isAlert) alarmHelper.playAlert() else alarmHelper.stopAlert()
+    }
+
+    private fun thresholdToProgress(threshold: Float): Int {
+        return ((threshold - DmsAnalyzer.MIN_EAR_THRESHOLD) * 100).roundToInt()
+            .coerceIn(0, seekEyeThreshold.max)
+    }
+
+    private fun progressToThreshold(progress: Int): Float {
+        return DmsAnalyzer.MIN_EAR_THRESHOLD + (progress / 100f)
+    }
+
+    private fun updateEyeThresholdText(threshold: Float) {
+        tvEyeThresholdValue.text = String.format(Locale.US, "%.2f", threshold)
     }
 
     private fun showCalibrationDialog() {
@@ -352,6 +400,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
 
         analyzer.isSunglassesMode = viewModel.isSunglassesMode.value
         analyzer.isYawnMode = viewModel.isYawnMode.value
+        analyzer.earThreshold = viewModel.earThreshold.value
         dmsAnalyzer = analyzer
 
         crashDetector.startListening()

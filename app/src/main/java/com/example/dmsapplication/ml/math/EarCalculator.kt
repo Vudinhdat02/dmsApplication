@@ -5,7 +5,7 @@ import kotlin.math.sqrt
 
 /**
  * Tính toán độ mở của mắt (Eye Aspect Ratio - EAR).
- * ĐÃ NÂNG CẤP: Sử dụng khoảng cách 3D (X, Y, Z) để giữ độ chuẩn xác khi mặt hơi quay/nghiêng.
+ * Sử dụng khoảng cách 3D (X, Y, Z) để giữ độ chuẩn xác khi mặt hơi quay/nghiêng.
  */
 object EarCalculator {
 

@@ -17,10 +17,20 @@ class DmsAnalyzer(
     private val onResults: (isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean, result: FaceLandmarkerResult?) -> Unit
 ) : ImageAnalysis.Analyzer {
 
+    companion object {
+        const val DEFAULT_EAR_THRESHOLD = 0.16f
+        const val MIN_EAR_THRESHOLD = 0.10f
+        const val MAX_EAR_THRESHOLD = 0.30f
+    }
+
     var isSunglassesMode: Boolean = false
     var isYawnMode: Boolean = true
     // Ngưỡng nhắm mắt
-    private val EAR_THRESHOLD         = 0.16f
+    @Volatile
+    var earThreshold: Float = DEFAULT_EAR_THRESHOLD
+        set(value) {
+            field = value.coerceIn(MIN_EAR_THRESHOLD, MAX_EAR_THRESHOLD)
+        }
     private val SMOOTH_WINDOW         = 3
     private val MOUTH_WIDTH_THRESHOLD = 0.5f
     private val EYE_CLOSED_DURATION   = 800L
@@ -82,7 +92,7 @@ class DmsAnalyzer(
 
             val mouthWidth = abs(landmarks[MOUTH_RIGHT].x() - landmarks[MOUTH_LEFT].x())
             val isEyesClosed = if (isSunglassesMode) false
-            else smoothedEar < EAR_THRESHOLD && mouthWidth < MOUTH_WIDTH_THRESHOLD
+            else smoothedEar < earThreshold && mouthWidth < MOUTH_WIDTH_THRESHOLD
 
             // 2. Góc đầu
             val headAngles = HeadPoseEstimator.estimate(landmarks)

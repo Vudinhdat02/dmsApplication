@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.dmsapplication.data.model.DriverStats
 import com.example.dmsapplication.data.repository.AlertRepository
 import com.example.dmsapplication.data.repository.StatsRepository
+import com.example.dmsapplication.ml.analyzer.DmsAnalyzer
 import com.example.dmsapplication.worker.SyncWorker
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _isYawnMode = MutableStateFlow(true)
     val isYawnMode = _isYawnMode.asStateFlow()
+
+    private val _earThreshold = MutableStateFlow(DmsAnalyzer.DEFAULT_EAR_THRESHOLD)
+    val earThreshold = _earThreshold.asStateFlow()
 
     private val _alertMessage = MutableSharedFlow<String>()
     val alertMessage = _alertMessage.asSharedFlow()
@@ -171,6 +175,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setYawnMode(enabled: Boolean) {
         _isYawnMode.value = enabled
+    }
+
+    fun setEarThreshold(threshold: Float) {
+        _earThreshold.value = threshold.coerceIn(
+            DmsAnalyzer.MIN_EAR_THRESHOLD,
+            DmsAnalyzer.MAX_EAR_THRESHOLD
+        )
     }
 
     fun triggerCrashAlert(latitude: Double, longitude: Double) {

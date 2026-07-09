@@ -16,6 +16,7 @@ class CalibrationManager(context: Context) {
         const val PITCH_THRESHOLD = 0.25f
     }
 
+    //lưu lại cá giá trị góc đầu chuẩn này vào bộ nhớ của thiết bị0
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

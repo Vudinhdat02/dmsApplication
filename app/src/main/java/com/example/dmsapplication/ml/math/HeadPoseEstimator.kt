@@ -4,12 +4,8 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import kotlin.math.sqrt
 
 /**
- * Tính góc đầu (yaw, pitch) sử dụng trục Z (độ sâu) của MediaPipe 3D Mesh.
- *
  * YAW   (quay trái/phải): Chênh lệch độ sâu giữa mắt trái và mắt phải.
  * PITCH (cúi/ngẩng)     : Chênh lệch độ sâu giữa Trán và Chóp mũi.
- *                         (TUYỆT ĐỐI KHÔNG dùng cằm để tránh nhiễu khi ngáp/nói chuyện).
- *
  * Việc sử dụng trục Z giúp thuật toán miễn nhiễm hoàn toàn với việc nghiêng đầu (Roll)
  * hoặc dịch chuyển tịnh tiến khuôn mặt trước camera.
  */

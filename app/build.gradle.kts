@@ -26,7 +26,7 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.example.dmsapplication.TestRunner"
 
         // Đọc file local.properties
         val properties = Properties()
@@ -73,9 +73,34 @@ android {
             excludes += "/META-INF/*.kotlin_module"
         }
     }
+
+    testOptions {
+        // Tắt animations để tests chạy nhanh hơn
+        animationsDisabled = true
+
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+
+        // Disable orchestrator for now to avoid issues
+        // execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
+}
+
+// Fix Firebase Protobuf dependency conflict
+configurations.all {
+    resolutionStrategy {
+        force("com.google.protobuf:protobuf-javalite:3.21.12")
+        force("com.google.protobuf:protobuf-lite:3.0.1")
+    }
 }
 
 dependencies {
+    // ========================================
+    // EXISTING DEPENDENCIES
+    // ========================================
+
     // Firebase
     implementation(platform("com.google.firebase:firebase-bom:33.1.2"))
     implementation("com.google.firebase:firebase-auth-ktx")
@@ -83,7 +108,6 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-storage:20.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
-    // Google Play Services
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
     // CAMERA & VISION
@@ -119,7 +143,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation("androidx.fragment:fragment-ktx:1.6.2")
 
-    // Thư viện Google Gemini AI
+    // Google Gemini AI
     implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // Khác
@@ -128,4 +152,40 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // ========================================
+    // ANDROID TESTING DEPENDENCIES
+    // ========================================
+
+    // AndroidX Test - Core
+    androidTestImplementation("androidx.test:core:1.5.0")
+    androidTestImplementation("androidx.test:core-ktx:1.5.0")
+    androidTestImplementation("androidx.test:runner:1.5.2")
+    androidTestImplementation("androidx.test:rules:1.5.0")
+
+    // AndroidX Test - JUnit
+    androidTestImplementation("androidx.test.ext:junit:1.1.5")
+    androidTestImplementation("androidx.test.ext:junit-ktx:1.1.5")
+
+    // Espresso
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
+    androidTestImplementation("androidx.test.espresso:espresso-contrib:3.5.1")
+    androidTestImplementation("androidx.test.espresso:espresso-intents:3.5.1")
+
+    // Mockito
+    androidTestImplementation("org.mockito:mockito-core:5.3.1")
+    androidTestImplementation("org.mockito:mockito-android:5.3.1")
+    androidTestImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
+
+    // Coroutines Test
+    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
+    // Fragment Testing
+    debugImplementation("androidx.fragment:fragment-testing:1.6.2")
+
+    // UI Automator
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+
+    // Truth
+    androidTestImplementation("com.google.truth:truth:1.1.5")
 }

@@ -93,6 +93,12 @@ class StatsRepository(private val context: Context) {
 
     private suspend fun saveToFirestore(stats: DriverStats): Boolean {
         return try {
+            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
+            if (firebaseApps.isEmpty()) {
+                Log.d("SAVE_FIRESTORE", "Firebase not initialized (test mode) - skipping Firestore save")
+                return false
+            }
+            
             val db = FirebaseFirestore.getInstance()
             // Tạo một Document ID duy nhất bằng userId + timestamp
             val docId = "${stats.userId}_${stats.timestamp}"
@@ -110,6 +116,17 @@ class StatsRepository(private val context: Context) {
     suspend fun deleteOldCloudImages(userId: String) {
         val sevenDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
         val oldStats = dao.getOldSyncedByUser(userId, sevenDaysAgo)
+        
+        val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
+        if (firebaseApps.isEmpty()) {
+            Log.d("CLEANUP", "Firebase not initialized (test mode) - skipping cloud cleanup")
+            // Still delete local records
+            oldStats.forEach { stats ->
+                dao.delete(stats)
+            }
+            return
+        }
+        
         oldStats.forEach { stats ->
             // 1. Xóa ảnh trên Cloudinary
             if (stats.cloudImageUrl.isNotEmpty()) {
@@ -155,6 +172,12 @@ class StatsRepository(private val context: Context) {
 
     suspend fun fetchFromCloud(userId: String) {
         try {
+            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
+            if (firebaseApps.isEmpty()) {
+                Log.d("FETCH_CLOUD", "Firebase not initialized (test mode) - skipping cloud fetch")
+                return
+            }
+            
             val db = FirebaseFirestore.getInstance()
             val snapshot = db.collection("driver_stats")
                 .whereEqualTo("userId", userId)
@@ -174,6 +197,12 @@ class StatsRepository(private val context: Context) {
     suspend fun refreshStatsFromCloud(userId: String) {
         Log.d("HISTORY_CHECK", "1. Bắt đầu gọi fetch từ Cloud cho User: $userId")
         try {
+            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
+            if (firebaseApps.isEmpty()) {
+                Log.d("HISTORY_CHECK", "Firebase not initialized (test mode) - skipping cloud sync")
+                return
+            }
+            
             val db = FirebaseFirestore.getInstance()
             val snapshot = db.collection("driver_stats")
                 .whereEqualTo("userId", userId)
