@@ -15,13 +15,10 @@ import com.example.dmsapplication.ui.settingView.contact.ContactSettingsFragment
 import com.example.dmsapplication.ui.settingView.password.ChangePasswordFragment
 import com.example.dmsapplication.ui.settingView.profile.ProfileFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-
 class SettingFragment : Fragment() {
-
     private var _binding: FragmentSettingBinding? = null
     private val binding get() = _binding!!
     private lateinit var viewModel: SettingViewModel
-
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -29,42 +26,34 @@ class SettingFragment : Fragment() {
         _binding = FragmentSettingBinding.inflate(inflater, container, false)
         return binding.root
     }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         viewModel = ViewModelProvider(this)[SettingViewModel::class.java]
         setupListeners()
     }
-
     private fun setupListeners() {
         binding.btnProfile.setOnClickListener {
             navigateTo(ProfileFragment())
         }
-
         binding.btnChangePassword.setOnClickListener {
             navigateTo(ChangePasswordFragment())
         }
-
         binding.btnInfoApp.setOnClickListener {
             navigateTo(AppInfoFragment())
         }
-
         binding.btnSendAlert.setOnClickListener {
             navigateTo(ContactSettingsFragment())
         }
-
         binding.btnLogout.setOnClickListener {
             showLogoutDialog()
         }
     }
-
     private fun navigateTo(fragment: Fragment) {
         parentFragmentManager.beginTransaction()
             .replace(com.example.dmsapplication.R.id.fragment_container, fragment)
             .addToBackStack(null)
             .commit()
     }
-
     private fun showLogoutDialog() {
         MaterialAlertDialogBuilder(requireContext())
             .setTitle("Đăng xuất")
@@ -74,7 +63,6 @@ class SettingFragment : Fragment() {
             .setPositiveButton("Đăng xuất") { _, _ -> performLogoutLogic() }
             .show()
     }
-
     private fun performLogoutLogic() {
         viewModel.logout()
         val prefs = requireContext().getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
@@ -84,7 +72,6 @@ class SettingFragment : Fragment() {
         startActivity(intent)
         activity?.finish()
     }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

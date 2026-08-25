@@ -2,13 +2,13 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background">
         <shape android:shape="ring" android:thicknessRatio="12" android:useLevel="false">
-            <solid android:color="#E0E0E0" />
+            <solid android:color="@color/surface_variant" />
         </shape>
     </item>
     <item android:id="@android:id/progress">
         <rotate android:fromDegrees="270" android:toDegrees="270">
             <shape android:shape="ring" android:thicknessRatio="12" android:useLevel="true">
-                <solid android:color="#4CAF50" />
+                <solid android:color="@color/success" />
             </shape>
         </rotate>
     </item>

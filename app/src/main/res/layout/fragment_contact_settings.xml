@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7F8">
+    android:background="@color/screen_background">
 
     <LinearLayout
         android:id="@+id/header"
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="Liên hệ khẩn cấp"
-            android:textColor="#00BCD4"
+            android:textColor="@color/brand_primary"
             android:textSize="22sp"
             android:textStyle="bold" />
     </LinearLayout>
@@ -90,7 +90,8 @@
             android:text="Lưu cấu hình"
             android:textSize="16sp"
             android:textStyle="bold"
-            app:backgroundTint="#00BCD4"
+            app:backgroundTint="@color/brand_primary"
+            android:textColor="@color/on_primary"
             app:cornerRadius="30dp" />
     </LinearLayout>
 

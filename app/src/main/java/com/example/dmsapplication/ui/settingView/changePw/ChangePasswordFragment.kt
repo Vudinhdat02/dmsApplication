@@ -10,11 +10,9 @@ import androidx.lifecycle.ViewModelProvider
 import com.example.dmsapplication.databinding.FragmentChangePasswordBinding
 
 class ChangePasswordFragment : Fragment() {
-
     private var _binding: FragmentChangePasswordBinding? = null
     private val binding get() = _binding!!
     private lateinit var viewModel: ChangePasswordViewModel
-
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -22,7 +20,6 @@ class ChangePasswordFragment : Fragment() {
         _binding = FragmentChangePasswordBinding.inflate(inflater, container, false)
         return binding.root
     }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         viewModel = ViewModelProvider(this)[ChangePasswordViewModel::class.java]
@@ -30,7 +27,6 @@ class ChangePasswordFragment : Fragment() {
         observeViewModel()
         setupListeners()
     }
-
     private fun observeViewModel() {
         viewModel.changeSuccess.observe(viewLifecycleOwner) { success ->
             if (success) {
@@ -44,12 +40,10 @@ class ChangePasswordFragment : Fragment() {
             }
         }
     }
-
     private fun setupListeners() {
         binding.btnBack.setOnClickListener {
             parentFragmentManager.popBackStack()
         }
-
         binding.btnChangePassword.setOnClickListener {
             val current = binding.edtCurrentPassword.text.toString().trim()
             val newPass  = binding.edtNewPassword.text.toString().trim()
@@ -67,11 +61,9 @@ class ChangePasswordFragment : Fragment() {
                 binding.edtConfirmPassword.error = "Mật khẩu xác nhận không khớp"
                 return@setOnClickListener
             }
-
             viewModel.changePassword(current, newPass)
         }
     }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

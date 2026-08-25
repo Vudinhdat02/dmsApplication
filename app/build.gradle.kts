@@ -35,12 +35,11 @@ android {
             properties.load(FileInputStream(localPropertiesFile))
         }
 
-        buildConfigField("String", "BREVO_API_KEY",           "\"${properties.getProperty("BREVO_API_KEY")}\"")
-        buildConfigField("String", "GROQ_API_KEY",            "\"${properties.getProperty("GROQ_API_KEY")}\"")
-        buildConfigField("String", "CLOUDINARY_CLOUD_NAME",   "\"${properties.getProperty("CLOUDINARY_CLOUD_NAME")}\"")
-        buildConfigField("String", "CLOUDINARY_UPLOAD_PRESET","\"${properties.getProperty("CLOUDINARY_UPLOAD_PRESET")}\"")
-        buildConfigField("String", "CLOUDINARY_API_KEY",      "\"${properties.getProperty("CLOUDINARY_API_KEY")}\"")
-        buildConfigField("String", "CLOUDINARY_API_SECRET",   "\"${properties.getProperty("CLOUDINARY_API_SECRET")}\"")
+        val serverBaseUrl = properties.getProperty(
+            "SERVER_BASE_URL",
+            "http://10.0.2.2:5078/"
+        )
+        buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
 
     buildTypes {

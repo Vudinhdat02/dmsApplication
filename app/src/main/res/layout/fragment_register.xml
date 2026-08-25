@@ -5,7 +5,7 @@
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7F8"
+    android:background="@color/screen_background"
     android:fitsSystemWindows="true">
 
     <!-- Ảnh nền phía trên -->
@@ -41,7 +41,7 @@
                 android:layout_gravity="center"
                 android:layout_marginBottom="5dp"
                 android:text="Tạo tài khoản mới"
-                android:textColor="#000000"
+                android:textColor="@color/text_primary"
                 android:textSize="24sp"
                 android:textStyle="bold" />
 
@@ -52,7 +52,7 @@
                 android:layout_gravity="center"
                 android:layout_marginBottom="25dp"
                 android:text="Đã có tài khoản? Đăng nhập ngay!"
-                android:textColor="#00BCD4"
+                android:textColor="@color/brand_primary"
                 android:textStyle="bold"
                 android:padding="5dp" />
 
@@ -110,7 +110,8 @@
                 android:id="@+id/btnRegister"
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
-                android:backgroundTint="#00BCD4"
+                android:backgroundTint="@color/brand_primary"
+                android:textColor="@color/on_primary"
                 android:text="Đăng ký"
                 android:textSize="16sp"
                 android:textStyle="bold"

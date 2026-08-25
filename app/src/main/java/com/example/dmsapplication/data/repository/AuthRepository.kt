@@ -1,7 +1,6 @@
 package com.example.dmsapplication.data.repository
 
 import android.content.Context
-import android.util.Log
 import com.example.dmsapplication.data.local.AppDatabase
 import com.example.dmsapplication.data.model.UserAccount
 import com.google.firebase.auth.FirebaseAuth
@@ -19,24 +18,13 @@ class AuthRepository(context: Context) {
     private val realtimeDb = FirebaseDatabase.getInstance("https://dmsdatabase-aceb4-default-rtdb.asia-southeast1.firebasedatabase.app/")
     private val userDao = AppDatabase.getInstance(context).userDao()
     private val repositoryScope = CoroutineScope(Dispatchers.IO)
-
     fun getCurrentUserId(): String? = auth.currentUser?.uid
-
     fun getUserFlow(uid: String): Flow<UserAccount?> = userDao.getUserByUidFlow(uid)
-
-    /**
-     * Đồng bộ dữ liệu User:
-     * 1. Kiểm tra Firestore (Nơi lưu mới).
-     * 2. Nếu trống, kiểm tra Realtime Database (Nơi lưu cũ) để di chuyển dữ liệu.
-     */
     fun syncUserProfile() {
         val userId = auth.currentUser?.uid ?: return
-        Log.d("DMS_DEBUG", "Bắt đầu sync profile cho UID: $userId")
-
         firestore.collection("users").document(userId).get()
             .addOnSuccessListener { snapshot ->
                 if (snapshot.exists()) {
-                    Log.d("DMS_DEBUG", "Tìm thấy dữ liệu trên Firestore")
                     val user = UserAccount(
                         uid   = userId,
                         name  = snapshot.getString("name") ?: "",
@@ -45,15 +33,10 @@ class AuthRepository(context: Context) {
                     )
                     saveToLocal(user)
                 } else {
-                    Log.d("DMS_DEBUG", "Firestore trống, đang tìm ở Realtime DB...")
                     migrateFromRealtimeDb(userId)
                 }
             }
-            .addOnFailureListener { e ->
-                Log.e("DMS_DEBUG", "Lỗi khi fetch Firestore: ${e.message}")
-            }
     }
-
     private fun migrateFromRealtimeDb(userId: String) {
         realtimeDb.getReference("Users").child(userId).get()
             .addOnSuccessListener { snapshot ->
@@ -61,29 +44,20 @@ class AuthRepository(context: Context) {
                     val name = snapshot.child("name").value?.toString() ?: ""
                     val dob  = snapshot.child("dob").value?.toString() ?: ""
                     val email = snapshot.child("email").value?.toString() ?: ""
-
                     val user = UserAccount(userId, name, email, dob)
-                    Log.d("DMS_DEBUG", "Tìm thấy dữ liệu cũ, đang migrate sang Firestore...")
-
-                    // 1. Lưu sang Firestore (Lần sau không cần migrate nữa)
                     firestore.collection("users").document(userId).set(user, SetOptions.merge())
-                    
-                    // 2. Lưu vào Room
                     saveToLocal(user)
                 }
             }
     }
-
     private fun saveToLocal(user: UserAccount) {
         repositoryScope.launch {
             userDao.insertOrUpdate(user)
         }
     }
-
     fun updateProfile(name: String, dob: String, callback: (Boolean, String?) -> Unit) {
         val userId = auth.currentUser?.uid ?: return
         val updates = mapOf("name" to name, "dob" to dob, "updatedAt" to System.currentTimeMillis())
-        
         firestore.collection("users").document(userId).update(updates)
             .addOnSuccessListener {
                 repositoryScope.launch {
@@ -96,20 +70,17 @@ class AuthRepository(context: Context) {
             }
             .addOnFailureListener { callback(false, it.message) }
     }
-
     fun signInWithEmail(email: String, pass: String, callback: (Boolean, String?) -> Unit) {
         auth.signInWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
             if (task.isSuccessful) syncUserProfile()
             callback(task.isSuccessful, task.exception?.message)
         }
     }
-
     fun registerUser(email: String, pass: String, name: String, dob: String, callback: (Boolean, String?) -> Unit) {
         auth.createUserWithEmailAndPassword(email, pass).addOnCompleteListener { task ->
             if (task.isSuccessful) {
                 val userId = auth.currentUser?.uid ?: return@addOnCompleteListener
                 val data = UserAccount(userId, name, email, dob)
-
                 firestore.collection("users").document(userId).set(data)
                     .addOnSuccessListener {
                         saveToLocal(data)
@@ -118,7 +89,6 @@ class AuthRepository(context: Context) {
             } else callback(false, task.exception?.message)
         }
     }
-
     fun resetPassword(email: String, callback: (Boolean, String?) -> Unit) {
         auth.sendPasswordResetEmail(email).addOnCompleteListener { task ->
             callback(task.isSuccessful, task.exception?.message)

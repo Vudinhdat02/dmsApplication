@@ -1,7 +1,7 @@
 package com.example.dmsapplication.ui.homeView
 
 import android.Manifest
-import android.graphics.Color
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -43,13 +43,10 @@ import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
-
-    // CHUẨN MVVM: Truyền Application vào Factory
     private val viewModel: HomeViewModel by activityViewModels { HomeViewModelFactory(requireActivity().application) }
-
     private var faceLandmarker: FaceLandmarker? = null
     private var dmsAnalyzer: DmsAnalyzer? = null
-    private val cameraExecutor = Executors.newSingleThreadExecutor()
+    private var cameraExecutor = Executors.newSingleThreadExecutor()
     private lateinit var alarmHelper: AlarmHelper
     private lateinit var locationHelper: LocationHelper
     private lateinit var calibrationManager: CalibrationManager
@@ -65,56 +62,51 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var tvYawnCount: TextView
     private lateinit var seekEyeThreshold: SeekBar
     private lateinit var tvEyeThresholdValue: TextView
+    private lateinit var switchGpsHome: SwitchCompat
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
     private var isVectorEnabled = false
     private val handler = Handler(Looper.getMainLooper())
-
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_home, container, false)
-
+        if (cameraExecutor.isShutdown) {
+            cameraExecutor = Executors.newSingleThreadExecutor()
+        }
         calibrationManager = CalibrationManager(requireContext())
         initViews(view)
-
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             v.setPadding(0, 0, 0, 0)
             insets
         }
-
         alarmHelper    = AlarmHelper(requireContext())
         locationHelper = LocationHelper(requireContext()) { speed, status ->
             viewModel.updateLocation(speed, status)
         }
-
         crashDetector = CrashDetector(requireContext()) {
             Toast.makeText(requireContext(), "PHÁT HIỆN VA CHẠM! Đang gửi cảnh báo...", Toast.LENGTH_LONG).show()
-
             val lat = locationHelper.currentLocation?.latitude ?: 0.0
             val lon = locationHelper.currentLocation?.longitude ?: 0.0
-
             viewModel.triggerCrashAlert(lat, lon)
         }
-
         setupFaceLandmarker()
         requestPermissionsLauncher.launch(
-            arrayOf(Manifest.permission.CAMERA, Manifest.permission.ACCESS_FINE_LOCATION)
+            arrayOf(
+                Manifest.permission.CAMERA,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
         )
         observeViewModel()
-
         if (!calibrationManager.isCalibrated) {
             view.post { showCalibrationDialog() }
         } else {
             viewModel.setCalibrated(true)
         }
-
-        viewModel.setGpsEnabled(true)
-
         return view
     }
-
     private fun initViews(view: View) {
         tvStatus      = view.findViewById(R.id.tvStatus)
         tvDrowsyCount = view.findViewById(R.id.tvDrowsyCount)
@@ -127,34 +119,38 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         pbSpeed       = view.findViewById(R.id.pbSpeed)
         seekEyeThreshold = view.findViewById(R.id.seekEyeThreshold)
         tvEyeThresholdValue = view.findViewById(R.id.tvEyeThresholdValue)
-        cameraBorder.setCardBackgroundColor(Color.GREEN)
+        cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.success))
         viewFinder.scaleType = PreviewView.ScaleType.FILL_CENTER
-
         view.findViewById<SwitchCompat>(R.id.switchSunglasses)
             .setOnCheckedChangeListener { _, isChecked ->
                 viewModel.setSunglassesMode(isChecked)
             }
-
         view.findViewById<SwitchCompat>(R.id.switchYawn)
             .setOnCheckedChangeListener { _, isChecked ->
                 viewModel.setYawnMode(isChecked)
             }
-
         view.findViewById<SwitchCompat>(R.id.switchVectorHome)
             .setOnCheckedChangeListener { _, isChecked ->
                 isVectorEnabled = isChecked
                 if (!isChecked) overlayView.setResults(null)
             }
-
-        view.findViewById<SwitchCompat>(R.id.switchGpsHome)
-            .setOnCheckedChangeListener { _, isChecked ->
+        switchGpsHome = view.findViewById<SwitchCompat>(R.id.switchGpsHome).apply {
+            isChecked = viewModel.isGpsEnabled.value
+            setOnCheckedChangeListener { _, isChecked ->
                 viewModel.setGpsEnabled(isChecked)
+                if (isChecked && !hasLocationPermission()) {
+                    requestPermissionsLauncher.launch(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        )
+                    )
+                }
             }
-
+        }
         view.findViewById<View>(R.id.btnRecalibrate).setOnClickListener {
             showCalibrationDialog()
         }
-
         seekEyeThreshold.max = ((DmsAnalyzer.MAX_EAR_THRESHOLD - DmsAnalyzer.MIN_EAR_THRESHOLD) * 100).roundToInt()
         seekEyeThreshold.progress = thresholdToProgress(viewModel.earThreshold.value)
         updateEyeThresholdText(viewModel.earThreshold.value)
@@ -164,17 +160,13 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                     viewModel.setEarThreshold(progressToThreshold(progress))
                 }
             }
-
             override fun onStartTrackingTouch(seekBar: SeekBar?) = Unit
-
             override fun onStopTrackingTouch(seekBar: SeekBar?) = Unit
         })
-
         view.findViewById<SwitchCompat>(R.id.switchCameraPreview)
             .setOnCheckedChangeListener { _, isChecked ->
                 viewModel.setCameraPreviewEnabled(isChecked)
             }
-
         view.findViewById<SwitchCompat>(R.id.switchVectorHome)
             .setOnCheckedChangeListener { _, isChecked ->
                 isVectorEnabled = isChecked
@@ -186,54 +178,40 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 }
             }
     }
-
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isDrowsy.collect { updateBorderAndAlarm() }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isHeadDistracted.collect { updateBorderAndAlarm() }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.drowsyCount.collect { count ->
-                tvDrowsyCount.text = "Mắt: $count"
+                tvDrowsyCount.text = "$count"
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.headDistractedCount.collect { count ->
-                tvHeadCount.text = "Đầu: $count"
+                tvHeadCount.text = "$count"
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.yawnCount.collect { count ->
-                tvYawnCount.text = "Ngáp: $count"
+                tvYawnCount.text = "$count"
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.suggestRest.collect { shouldRest ->
                 if (shouldRest) {
-                    Toast.makeText(requireContext(), "Bạn đang rất mệt, hãy dừng xe nghỉ ngơi!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), "Hãy dừng xe nghỉ ngơi!", Toast.LENGTH_LONG).show()
                     alarmHelper.playRestAlert()
                 }
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.speed.collect { speedStr ->
-                val speedVal = speedStr
-                    .replace("Tốc độ: ", "")
-                    .replace(" km/h", "")
-                    .trim()
-                    .toFloatOrNull() ?: 0f
-
+            viewModel.speedKmh.collect { speedVal ->
                 val displaySpeed = speedVal.toInt()
                 tvSpeedNumber.text = displaySpeed.toString()
-
                 val progressVal = displaySpeed.coerceIn(0, 120)
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
                     pbSpeed.setProgress(progressVal, true)
@@ -242,38 +220,35 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 }
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.locationStatus.collect { status -> tvStatus.text = status }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isGpsEnabled.collect { enabled ->
-                if (enabled) locationHelper.startTracking()
+                if (::switchGpsHome.isInitialized && switchGpsHome.isChecked != enabled) {
+                    switchGpsHome.isChecked = enabled
+                }
+                if (enabled) startLocationTrackingIfAllowed()
                 else locationHelper.stopTracking()
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isMonitoringEnabled.collect { monitoring ->
                 if (!monitoring && !viewModel.isDrowsy.value && !viewModel.isHeadDistracted.value) {
-                    cameraBorder.setCardBackgroundColor(if (monitoring) Color.GREEN else Color.GRAY)
+                    cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), if (monitoring) R.color.success else R.color.text_muted))
                 }
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isSunglassesMode.collect { isSunglasses ->
                 dmsAnalyzer?.isSunglassesMode = isSunglasses
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isYawnMode.collect { isYawn ->
                 dmsAnalyzer?.isYawnMode = isYawn
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.earThreshold.collect { threshold ->
                 dmsAnalyzer?.earThreshold = threshold
@@ -286,7 +261,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 }
             }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isCameraPreviewEnabled.collect { isEnabled ->
                 if (isEnabled) {
@@ -296,37 +270,31 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 } else {
                     viewFinder.visibility = View.INVISIBLE
                     overlayView.visibility = View.GONE
-                    cameraBorder.setCardBackgroundColor(Color.BLACK)
+                    cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), R.color.camera_inactive))
                 }
             }
         }
     }
-
     private fun updateBorderAndAlarm() {
         val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
-        cameraBorder.setCardBackgroundColor(if (isAlert) Color.RED else Color.GREEN)
+        cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), if (isAlert) R.color.danger else R.color.success))
         if (isAlert) alarmHelper.playAlert() else alarmHelper.stopAlert()
     }
-
     private fun thresholdToProgress(threshold: Float): Int {
         return ((threshold - DmsAnalyzer.MIN_EAR_THRESHOLD) * 100).roundToInt()
             .coerceIn(0, seekEyeThreshold.max)
     }
-
     private fun progressToThreshold(progress: Int): Float {
         return DmsAnalyzer.MIN_EAR_THRESHOLD + (progress / 100f)
     }
-
     private fun updateEyeThresholdText(threshold: Float) {
         tvEyeThresholdValue.text = String.format(Locale.US, "%.2f", threshold)
     }
-
     private fun showCalibrationDialog() {
         val dialog = CalibrationDialog()
         dialog.setCalibrationListener(this)
         dialog.show(childFragmentManager, "calibration")
     }
-
     override fun onCalibrationComplete() {
         val angles = latestHeadAngles
         if (angles != null) {
@@ -339,9 +307,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             Toast.makeText(requireContext(), "Không phát hiện khuôn mặt. Hãy thử lại!", Toast.LENGTH_LONG).show()
         }
     }
-
     override fun onCalibrationCancelled() { }
-
     private fun setupFaceLandmarker() {
         try {
             val baseOptions = BaseOptions.builder()
@@ -360,18 +326,38 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             Toast.makeText(requireContext(), "Lỗi AI: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
-
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
             if (permissions[Manifest.permission.CAMERA] == true) startCamera()
-            if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-                if (viewModel.isGpsEnabled.value) locationHelper.startTracking()
+            val locationGranted =
+                permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+                    permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
+                    hasLocationPermission()
+            if (locationGranted) {
+                if (!viewModel.isGpsEnabled.value) viewModel.setGpsEnabled(true)
+                startLocationTrackingIfAllowed()
+            } else if (!locationGranted && viewModel.isGpsEnabled.value) {
+                viewModel.setGpsEnabled(false)
+                Toast.makeText(requireContext(), "Chưa có quyền vị trí để giám sát bằng GPS", Toast.LENGTH_SHORT).show()
             }
         }
-
+    private fun startLocationTrackingIfAllowed() {
+        if (hasLocationPermission()) {
+            locationHelper.startTracking()
+        }
+    }
+    private fun hasLocationPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+                requireContext(),
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+    }
     private fun startCamera() {
         val fl = faceLandmarker ?: return
-
         val analyzer = DmsAnalyzer(
             faceLandmarker     = fl,
             calibrationManager = calibrationManager,
@@ -379,47 +365,36 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 result?.faceLandmarks()?.firstOrNull()?.let { lm ->
                     latestHeadAngles = HeadPoseEstimator.estimate(lm)
                 }
-
                 activity?.runOnUiThread {
                     val wasAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
-
                     viewModel.onDmsResult(isDrowsy, isHeadDistracted, isYawning)
-
                     val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
-
                     if (!wasAlert && isAlert) {
                         captureAndSave()
                     }
-
                     if (isVectorEnabled) {
                         overlayView.setResults(result)
                     }
                 }
             }
         )
-
         analyzer.isSunglassesMode = viewModel.isSunglassesMode.value
         analyzer.isYawnMode = viewModel.isYawnMode.value
         analyzer.earThreshold = viewModel.earThreshold.value
         dmsAnalyzer = analyzer
-
         crashDetector.startListening()
-
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
-
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(viewFinder.surfaceProvider)
             }
-
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .setTargetRotation(viewFinder.display.rotation)
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .also { it.setAnalyzer(cameraExecutor, analyzer) }
-
             cameraProvider.unbindAll()
             cameraProvider.bindToLifecycle(
                 viewLifecycleOwner,
@@ -429,12 +404,10 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             )
         }, ContextCompat.getMainExecutor(requireContext()))
     }
-
     private fun captureAndSave() {
         val bitmap = viewFinder.bitmap ?: return
         viewModel.saveViolationRecord(bitmap)
     }
-
     override fun onDestroyView() {
         super.onDestroyView()
         handler.removeCallbacksAndMessages(null)

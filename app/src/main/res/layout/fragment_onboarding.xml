@@ -5,7 +5,7 @@
     android:id="@+id/mainBoarding"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7F8">
+    android:background="@color/screen_background">
 
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPagerBackground"
@@ -17,7 +17,7 @@
     <View
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:background="#33000000"
+        android:background="@color/overlay_scrim_light"
         app:layout_constraintBottom_toBottomOf="@id/viewPagerBackground"
         app:layout_constraintTop_toTopOf="@id/viewPagerBackground" />
 
@@ -39,7 +39,7 @@
             android:text="Bắt đầu hành trình an toàn!"
             android:textSize="26sp"
             android:textStyle="bold"
-            android:textColor="#00BCD4"
+            android:textColor="@color/brand_primary"
             android:gravity="center"
             android:layout_marginBottom="20dp"/>
 
@@ -48,7 +48,7 @@
             android:layout_height="wrap_content"
             android:text="Hệ thống giám sát lái xe giúp bạn luôn tập trung và tỉnh táo trên mọi cung đường."
             android:textSize="16sp"
-            android:textColor="#757575"
+            android:textColor="@color/text_muted"
             android:gravity="center"
             android:layout_marginBottom="40dp"/>
 
@@ -59,7 +59,8 @@
             android:text="Bắt đầu ngay"
             android:textStyle="bold"
             android:textSize="16sp"
-            android:backgroundTint="#00BCD4"
+            android:backgroundTint="@color/brand_primary"
+            android:textColor="@color/on_primary"
             app:cornerRadius="30dp"/>
     </LinearLayout>
 

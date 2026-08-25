@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F7F8">
+    android:background="@color/screen_background">
 
     <TextView
         android:id="@+id/tvHeader"
@@ -13,7 +13,7 @@
         android:gravity="center_vertical"
         android:paddingHorizontal="16dp"
         android:text="Lịch sử mất tập trung"
-        android:textColor="#00BCD4"
+        android:textColor="@color/brand_primary"
         android:textSize="22sp"
         android:textStyle="bold"
         app:layout_constraintTop_toTopOf="parent"
@@ -35,7 +35,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="Tổng: \nQuay đầu: 0\nNhắm mắt: 0"
-            android:textColor="#555555"
+            android:textColor="@color/text_secondary"
             android:textSize="14sp"
             android:textStyle="bold"/>
 
@@ -45,11 +45,11 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Hôm nay"
-            android:textColor="#00BCD4"
-            app:strokeColor="#00BCD4"
+            android:textColor="@color/brand_primary"
+            app:strokeColor="@color/brand_primary"
             app:cornerRadius="8dp"
             app:icon="@drawable/ic_calendar"
-            app:iconTint="#00BCD4"/>
+            app:iconTint="@color/brand_primary"/>
     </LinearLayout>
 
     <TextView
@@ -57,7 +57,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Chưa có dữ liệu lịch sử"
-        android:textColor="#AAAAAA"
+        android:textColor="@color/text_disabled"
         android:textSize="16sp"
         android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/layoutFilter"

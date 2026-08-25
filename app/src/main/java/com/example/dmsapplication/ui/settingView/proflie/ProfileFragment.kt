@@ -12,13 +12,10 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.dmsapplication.databinding.FragmentProfileBinding
 import java.util.*
-
 class ProfileFragment : Fragment() {
-
     private var _binding: FragmentProfileBinding? = null
     private val binding get() = _binding!!
     private lateinit var viewModel: ProfileViewModel
-
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
@@ -26,7 +23,6 @@ class ProfileFragment : Fragment() {
         _binding = FragmentProfileBinding.inflate(inflater, container, false)
         return binding.root
     }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         viewModel = ViewModelProvider(this)[ProfileViewModel::class.java]
@@ -34,7 +30,6 @@ class ProfileFragment : Fragment() {
         observeViewModel()
         setupListeners()
     }
-
     private fun observeViewModel() {
         viewModel.userName.observe(viewLifecycleOwner) { binding.edtName.setText(it) }
         viewModel.userEmail.observe(viewLifecycleOwner) { binding.edtEmail.setText(it) }
@@ -51,12 +46,10 @@ class ProfileFragment : Fragment() {
             }
         }
     }
-
     private fun setupListeners() {
         binding.btnBack.setOnClickListener {
             parentFragmentManager.popBackStack()
         }
-
         binding.edtDob.setOnClickListener {
             val calendar = Calendar.getInstance()
             DatePickerDialog(
@@ -69,7 +62,6 @@ class ProfileFragment : Fragment() {
                 calendar.get(Calendar.DAY_OF_MONTH)
             ).show()
         }
-
         binding.btnSave.setOnClickListener {
             val name = binding.edtName.text.toString().trim()
             val dob  = binding.edtDob.text.toString().trim()
@@ -80,7 +72,6 @@ class ProfileFragment : Fragment() {
             viewModel.updateProfile(name, dob, null)
         }
     }
-
     override fun onDestroyView() {
         super.onDestroyView()
         _binding = null

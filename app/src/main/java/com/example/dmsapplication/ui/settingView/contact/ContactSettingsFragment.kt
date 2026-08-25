@@ -13,40 +13,30 @@ import com.example.dmsapplication.data.repository.AlertRepository
 import kotlinx.coroutines.launch
 
 class ContactSettingsFragment : Fragment(R.layout.fragment_contact_settings) {
-
     private val alertRepository = AlertRepository()
     private lateinit var edtEmail1: EditText
     private lateinit var edtEmail2: EditText
     private lateinit var btnSave: Button
     private lateinit var btnBack: ImageView
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
-        // Ánh xạ View
         edtEmail1 = view.findViewById(R.id.edtEmail1)
         edtEmail2 = view.findViewById(R.id.edtEmail2)
         btnSave = view.findViewById(R.id.btnSaveContacts)
         btnBack = view.findViewById(R.id.btnBack)
-
         loadExistingContacts()
-
         btnBack.setOnClickListener {
             parentFragmentManager.popBackStack()
         }
-
         btnSave.setOnClickListener {
             val email1 = edtEmail1.text.toString().trim()
             val email2 = edtEmail2.text.toString().trim()
-
             val emailsToSave = mutableListOf<String>()
             if (email1.isNotEmpty()) emailsToSave.add(email1)
             if (email2.isNotEmpty()) emailsToSave.add(email2)
-
             saveContacts(emailsToSave)
         }
     }
-
     private fun loadExistingContacts() {
         lifecycleScope.launch {
             val contacts = alertRepository.getEmergencyContacts()
@@ -54,7 +44,6 @@ class ContactSettingsFragment : Fragment(R.layout.fragment_contact_settings) {
             if (contacts.size > 1) edtEmail2.setText(contacts[1])
         }
     }
-
     private fun saveContacts(emails: List<String>) {
         btnSave.isEnabled = false
         btnSave.text = "Đang lưu..."

@@ -11,13 +11,10 @@ import kotlinx.coroutines.flow.Flow
 interface UserDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(user: UserAccount)
-
     @Query("SELECT * FROM user_account WHERE uid = :uid LIMIT 1")
     fun getUserByUidFlow(uid: String): Flow<UserAccount?>
-
     @Query("SELECT * FROM user_account WHERE uid = :uid LIMIT 1")
     suspend fun getUserByUid(uid: String): UserAccount?
-
     @Query("DELETE FROM user_account WHERE uid = :uid")
     suspend fun deleteUser(uid: String)
 }

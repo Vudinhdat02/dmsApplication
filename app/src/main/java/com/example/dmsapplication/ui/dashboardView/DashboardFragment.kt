@@ -1,7 +1,7 @@
 package com.example.dmsapplication.ui.dashboardView
 
 import android.animation.ValueAnimator
-import android.graphics.Color
+import androidx.core.content.ContextCompat
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -17,26 +17,19 @@ import com.google.android.material.progressindicator.CircularProgressIndicator
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 class DashboardFragment : Fragment() {
-
     private val viewModel: DashboardViewModel by viewModels {
         DashboardViewModelFactory(requireActivity().application)
     }
-
-    // Khai báo đúng chỗ: bên trong class
     private var typeWriteJob: Job? = null
-
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
         return inflater.inflate(R.layout.fragment_dashboard, container, false)
     }
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         val tvScore       = view.findViewById<TextView>(R.id.tvSafetyScore)
         val progressScore = view.findViewById<CircularProgressIndicator>(R.id.progressScore)
         val tvStatus      = view.findViewById<TextView>(R.id.tvScoreStatus)
@@ -44,7 +37,6 @@ class DashboardFragment : Fragment() {
         val tvTotalDrowsy = view.findViewById<TextView>(R.id.tvTotalDrowsy)
         val tvTotalHead   = view.findViewById<TextView>(R.id.tvTotalHead)
         val btnRequestAi  = view.findViewById<MaterialButton>(R.id.btnRequestAi)
-
         val bars = listOf(
             view.findViewById<View>(R.id.barT2), view.findViewById<View>(R.id.barT3),
             view.findViewById<View>(R.id.barT4), view.findViewById<View>(R.id.barT5),
@@ -57,17 +49,14 @@ class DashboardFragment : Fragment() {
             view.findViewById<View>(R.id.spaceT6), view.findViewById<View>(R.id.spaceT7),
             view.findViewById<View>(R.id.spaceCN)
         )
-
-        // 1. ANIMATION VÒNG TRÒN ĐIỂM SỐ
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.safetyScore.collect { score ->
-                val colorString = when {
-                    score >= 80 -> "#4CAF50"
-                    score >= 50 -> "#FF9800"
-                    else        -> "#EF4444"
+                val colorRes = when {
+                    score >= 80 -> R.color.success
+                    score >= 50 -> R.color.warning
+                    else        -> R.color.danger
                 }
-                val parsedColor = Color.parseColor(colorString)
-
+                val parsedColor = ContextCompat.getColor(requireContext(), colorRes)
                 tvStatus.text = when {
                     score >= 80 -> "Trạng thái: Rất Tốt"
                     score >= 50 -> "Trạng thái: Cần chú ý"
@@ -76,7 +65,6 @@ class DashboardFragment : Fragment() {
                 tvStatus.setTextColor(parsedColor)
                 tvScore.setTextColor(parsedColor)
                 progressScore.setIndicatorColor(parsedColor)
-
                 val animator = ValueAnimator.ofInt(0, score)
                 animator.duration = 1500
                 animator.addUpdateListener { animation ->
@@ -87,8 +75,6 @@ class DashboardFragment : Fragment() {
                 animator.start()
             }
         }
-
-        // 2. HIỂN THỊ NỘI DUNG AI — dùng typeWriteJob để cancel cái cũ trước khi chạy cái mới
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.aiInsight.collect { insight ->
                 typeWriteJob?.cancel()
@@ -97,30 +83,21 @@ class DashboardFragment : Fragment() {
                 }
             }
         }
-
-        // 3. TRẠNG THÁI NÚT AI (loading hay không)
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isAiLoading.collect { isLoading ->
                 btnRequestAi.isEnabled = !isLoading
                 btnRequestAi.text = if (isLoading) "Đang phân tích..." else "Phân tích và nhận gợi ý AI"
             }
         }
-
-        // 4. SỰ KIỆN BẤM NÚT — chỉ gọi requestAiAnalysis, không collect gì thêm ở đây
         btnRequestAi.setOnClickListener {
             viewModel.requestAiAnalysis()
         }
-
-        // 5. TỔNG SỐ LỖI TUẦN
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.totalDrowsy.collect { tvTotalDrowsy.text = it.toString() }
         }
-
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.totalHead.collect { tvTotalHead.text = it.toString() }
         }
-
-        // 6. BIỂU ĐỒ CỘT
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.weeklyData.collect { weekData ->
                 val maxError = weekData.maxOrNull() ?: 1f
@@ -132,7 +109,6 @@ class DashboardFragment : Fragment() {
             }
         }
     }
-
     private suspend fun TextView.typeWrite(text: String, delayMs: Long = 15) {
         this.text = ""
         for (char in text) {
@@ -140,10 +116,8 @@ class DashboardFragment : Fragment() {
             delay(delayMs)
         }
     }
-
     private fun updateNativeBarChart(barView: View, spaceView: View, targetPercentage: Float) {
         val safePercent = targetPercentage.coerceIn(0f, 100f)
-
         if (safePercent == 0f) {
             barView.post {
                 val spaceParams = spaceView.layoutParams as LinearLayout.LayoutParams
@@ -156,7 +130,6 @@ class DashboardFragment : Fragment() {
             }
             return
         }
-
         val animator = ValueAnimator.ofFloat(0f, safePercent)
         animator.duration = 1000
         animator.addUpdateListener { animation ->
@@ -165,7 +138,6 @@ class DashboardFragment : Fragment() {
                 val spaceParams = spaceView.layoutParams as LinearLayout.LayoutParams
                 spaceParams.weight = 100f - currentVal
                 spaceView.layoutParams = spaceParams
-
                 val barParams = barView.layoutParams as LinearLayout.LayoutParams
                 barParams.weight = currentVal
                 barView.layoutParams = barParams

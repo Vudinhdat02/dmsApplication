@@ -4,25 +4,23 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.util.Log
 import com.example.dmsapplication.data.local.AppDatabase
 import com.example.dmsapplication.data.model.DriverStats
-import com.example.dmsapplication.data.remote.CloudinaryService
+import com.example.dmsapplication.data.remote.LocalServerService
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
-import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.tasks.await
-import com.google.firebase.firestore.FirebaseFirestore
 
 class StatsRepository(private val context: Context) {
-
     private val dao = AppDatabase.getInstance(context).statsDao()
+
     fun isNetworkAvailable(): Boolean {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val network = cm.activeNetwork ?: return false
@@ -30,7 +28,6 @@ class StatsRepository(private val context: Context) {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
 
-    // Lưu ảnh bitmap vào local
     fun saveImageLocally(bitmap: Bitmap, fileName: String): String {
         val dir = File(context.filesDir, "alerts")
         if (!dir.exists()) dir.mkdirs()
@@ -41,51 +38,32 @@ class StatsRepository(private val context: Context) {
         return file.absolutePath
     }
 
-    // Lưu stats vào Room
-    suspend fun saveStats(stats: DriverStats): Long {
-        return dao.insert(stats)
-    }
+    suspend fun saveStats(stats: DriverStats): Long = dao.insert(stats)
 
     fun getRecentStatsByUser(userId: String): Flow<List<DriverStats>> {
-        val twoDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
-        return dao.getRecentByUser(userId, twoDaysAgo)
+        val sevenDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
+        return dao.getRecentByUser(userId, sevenDaysAgo)
     }
 
-    // Upload lên Cloudinary và xóa local
-    suspend fun syncToCloud(stats: DriverStats): Boolean {
+    suspend fun syncToServer(stats: DriverStats): Boolean {
         if (stats.localImagePath.isEmpty()) return false
         val file = File(stats.localImagePath)
         if (!file.exists()) return false
-
         return try {
             val requestFile = file.asRequestBody("image/jpeg".toMediaTypeOrNull())
             val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
-            val preset = CloudinaryService.UPLOAD_PRESET.toRequestBody("text/plain".toMediaTypeOrNull())
-            val folder = "dms/${stats.userId}".toRequestBody("text/plain".toMediaTypeOrNull())
-
-            val response = CloudinaryService.api.uploadImage(
-                cloudName = CloudinaryService.CLOUD_NAME,
-                file = body,
-                uploadPreset = preset,
-                folder = folder
+            val response = LocalServerService.api.uploadImage(body)
+            if (!response.isSuccessful) return false
+            val remotePath = response.body()?.path ?: return false
+            val syncedStats = stats.copy(
+                cloudImageUrl = LocalServerService.absoluteUrl(remotePath),
+                isSynced = true,
+                localImagePath = ""
             )
-
-            if (response.isSuccessful) {
-                val url = response.body()?.secure_url ?: return false
-                val syncedStats = stats.copy(
-                    cloudImageUrl = url,
-                    isSynced = true,
-                    localImagePath = ""
-                )
-                val isFirestoreSuccess = saveToFirestore(syncedStats)
-                if (isFirestoreSuccess) {
-                    dao.update(syncedStats)
-                    file.delete()
-                    true
-                } else {
-                    false
-                }
-            } else false
+            if (!saveToFirestore(syncedStats)) return false
+            dao.update(syncedStats)
+            file.delete()
+            true
         } catch (e: Exception) {
             false
         }
@@ -93,137 +71,73 @@ class StatsRepository(private val context: Context) {
 
     private suspend fun saveToFirestore(stats: DriverStats): Boolean {
         return try {
-            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
-            if (firebaseApps.isEmpty()) {
-                Log.d("SAVE_FIRESTORE", "Firebase not initialized (test mode) - skipping Firestore save")
-                return false
-            }
-            
-            val db = FirebaseFirestore.getInstance()
-            // Tạo một Document ID duy nhất bằng userId + timestamp
-            val docId = "${stats.userId}_${stats.timestamp}"
-            db.collection("driver_stats")
-                .document(docId)
+            if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) return false
+            FirebaseFirestore.getInstance()
+                .collection("driver_stats")
+                .document(stats.firestoreDocId())
                 .set(stats)
                 .await()
             true
         } catch (e: Exception) {
-            e.printStackTrace()
             false
         }
     }
 
-    suspend fun deleteOldCloudImages(userId: String) {
+    suspend fun deleteOldServerImages(userId: String) {
         val sevenDaysAgo = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(7)
-        val oldStats = dao.getOldSyncedByUser(userId, sevenDaysAgo)
-        
-        val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
-        if (firebaseApps.isEmpty()) {
-            Log.d("CLEANUP", "Firebase not initialized (test mode) - skipping cloud cleanup")
-            // Still delete local records
-            oldStats.forEach { stats ->
-                dao.delete(stats)
-            }
+        val localOldStats = dao.getOldSyncedByUser(userId, sevenDaysAgo)
+        val statsByDocId = linkedMapOf<String, DriverStats>()
+        localOldStats.forEach { stats -> statsByDocId[stats.firestoreDocId()] = stats }
+        if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) {
+            localOldStats.forEach { stats -> dao.delete(stats) }
             return
         }
-        
-        oldStats.forEach { stats ->
-            // 1. Xóa ảnh trên Cloudinary
-            if (stats.cloudImageUrl.isNotEmpty()) {
-                val publicId = extractPublicId(stats.cloudImageUrl)
-                if (publicId.isNotEmpty()) {
-                    try {
-                        // MỚI - có timestamp
-                        val (timestamp, signature) = CloudinaryService.generateSignature(publicId)
-                        CloudinaryService.api.deleteImage(
-                            cloudName  = CloudinaryService.CLOUD_NAME,
-                            publicId   = publicId,
-                            apiKey     = CloudinaryService.API_KEY,
-                            timestamp  = timestamp,
-                            signature  = signature
-                        )
-                    } catch (e: Exception) { Log.e("CLEANUP", "Lỗi Cloudinary: ${e.message}") }
-                }
-            }
+        val db = FirebaseFirestore.getInstance()
+        try {
+            val remoteSnapshot = db.collection("driver_stats")
+                .whereEqualTo("userId", userId)
+                .get()
+                .await()
+            remoteSnapshot.toObjects(DriverStats::class.java)
+                .filter { it.timestamp < sevenDaysAgo }
+                .forEach { stats -> statsByDocId[stats.firestoreDocId()] = stats }
+        } catch (_: Exception) {
+        }
+        statsByDocId.forEach { (docId, stats) ->
+            deleteServerImage(stats.cloudImageUrl)
             try {
-                val docId = "${stats.userId}_${stats.timestamp}"
-                FirebaseFirestore.getInstance()
-                    .collection("driver_stats")
-                    .document(docId)
-                    .delete()
-                    .await()
-            } catch (e: Exception) { Log.e("CLEANUP", "Lỗi Firestore: ${e.message}") }
-            dao.delete(stats)
+                db.collection("driver_stats").document(docId).delete().await()
+            } catch (_: Exception) {
+            }
+            localOldStats.firstOrNull { it.firestoreDocId() == docId }?.let { dao.delete(it) }
         }
     }
 
     suspend fun getUnsynced(): List<DriverStats> = dao.getUnsynced()
 
-    private fun extractPublicId(url: String): String {
-        return try {
-            // https://res.cloudinary.com/cloud/image/upload/v123/dms/userId/filename.jpg
-            val parts = url.split("/upload/")
-            if (parts.size < 2) return ""
-            val afterUpload = parts[1] // v123/dms/userId/filename.jpg
-            val withoutVersion = afterUpload.substringAfter("/") // dms/userId/filename.jpg
-            withoutVersion.substringBeforeLast(".") // dms/userId/filename
-        } catch (e: Exception) { "" }
+    private suspend fun deleteServerImage(imageUrl: String) {
+        val imageId = imageUrl.substringBefore('?').substringAfterLast('/')
+        if (runCatching { UUID.fromString(imageId) }.isFailure) return
+        try {
+            LocalServerService.api.deleteImage(imageId)
+        } catch (_: Exception) {
+        }
     }
+
+    private fun DriverStats.firestoreDocId(): String = "${userId}_${timestamp}"
 
     suspend fun fetchFromCloud(userId: String) {
         try {
-            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
-            if (firebaseApps.isEmpty()) {
-                Log.d("FETCH_CLOUD", "Firebase not initialized (test mode) - skipping cloud fetch")
-                return
-            }
-            
-            val db = FirebaseFirestore.getInstance()
-            val snapshot = db.collection("driver_stats")
+            if (com.google.firebase.FirebaseApp.getApps(context).isEmpty()) return
+            val snapshot = FirebaseFirestore.getInstance()
+                .collection("driver_stats")
                 .whereEqualTo("userId", userId)
                 .get()
                 .await()
-
-            val remoteList = snapshot.toObjects(DriverStats::class.java)
-
-            remoteList.forEach { remoteStats ->
-                dao.insertIgnoreConflict(remoteStats)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
+            snapshot.toObjects(DriverStats::class.java).forEach { dao.insertIgnoreConflict(it) }
+        } catch (_: Exception) {
         }
     }
 
-    suspend fun refreshStatsFromCloud(userId: String) {
-        Log.d("HISTORY_CHECK", "1. Bắt đầu gọi fetch từ Cloud cho User: $userId")
-        try {
-            val firebaseApps = com.google.firebase.FirebaseApp.getApps(context)
-            if (firebaseApps.isEmpty()) {
-                Log.d("HISTORY_CHECK", "Firebase not initialized (test mode) - skipping cloud sync")
-                return
-            }
-            
-            val db = FirebaseFirestore.getInstance()
-            val snapshot = db.collection("driver_stats")
-                .whereEqualTo("userId", userId)
-                .get()
-                .await()
-
-            Log.d("HISTORY_CHECK", "2. Đã lấy xong snapshot. Số lượng bản ghi trên Cloud: ${snapshot.size()}")
-
-            val remoteList = snapshot.toObjects(DriverStats::class.java)
-            Log.d("HISTORY_CHECK", "3. Chuyển đổi thành List Object thành công: ${remoteList.size} mục")
-
-            remoteList.forEach { remoteStats ->
-                dao.insertIgnoreConflict(remoteStats)
-            }
-            Log.d("HISTORY_CHECK", "4. Đã thực hiện Insert vào Room xong.")
-
-        } catch (e: Exception) {
-            Log.e("HISTORY_CHECK", "LỖI TẠI HISTORY: ${e.message}")
-            e.printStackTrace()
-        }
-    }
-
-
+    suspend fun refreshStatsFromCloud(userId: String) = fetchFromCloud(userId)
 }

@@ -13,3 +13,24 @@
 .externalNativeBuild
 .cxx
 local.properties
+/server/.env
+/server/.venv/
+/server/__pycache__/
+/server/*.log
+/server/server.pid
+
+# ASP.NET Core backend
+/DMSServer/**/.vs/
+/DMSServer/**/bin/
+/DMSServer/**/obj/
+/DMSServer/**/App_Data/
+/DMSServer/**/*.db
+/DMSServer/**/*.db-shm
+/DMSServer/**/*.db-wal
+/DMSServer/**/appsettings.Local.json
+/DMSServer/**/appsettings.Secrets.json
+/DMSServer/**/secrets.json
+/DMSServer/**/.env
+/DMSServer/**/*.pfx
+/DMSServer/**/*.key
+/DMSServer/**/*.pem

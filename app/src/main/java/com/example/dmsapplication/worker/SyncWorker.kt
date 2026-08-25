@@ -1,41 +1,44 @@
 package com.example.dmsapplication.worker
 
 import android.content.Context
-import androidx.work.*
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import com.example.dmsapplication.data.repository.StatsRepository
 import com.google.firebase.auth.FirebaseAuth
+import java.util.concurrent.TimeUnit
 
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-
     override suspend fun doWork(): Result {
         val repository = StatsRepository(applicationContext)
         val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.failure()
-
         return try {
-            // 1. Upload tất cả ảnh chưa sync lên Cloudinary
             val unsynced = repository.getUnsynced()
-            unsynced.forEach { repository.syncToCloud(it) }
-
-            // 2. Xóa ảnh cũ hơn 2 ngày trên Cloudinary + xóa khỏi DB
-            repository.deleteOldCloudImages(userId)
-
-            Result.success()
+            var allSucceeded = true
+            unsynced.forEach { stats ->
+                if (!repository.syncToServer(stats)) allSucceeded = false
+            }
+            repository.deleteOldServerImages(userId)
+            if (allSucceeded) Result.success() else Result.retry()
         } catch (e: Exception) {
             Result.retry()
         }
     }
 
     companion object {
-        // Chạy ngay lập tức khi có mạng (OneTimeWorkRequest)
         fun scheduleImmediate(context: Context) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-
             val request = OneTimeWorkRequestBuilder<SyncWorker>()
                 .setConstraints(constraints)
                 .build()
-
             WorkManager.getInstance(context).enqueueUniqueWork(
                 "sync_immediate",
                 ExistingWorkPolicy.REPLACE,
@@ -43,18 +46,13 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             )
         }
 
-        // Chạy định kỳ để dọn ảnh cũ
         fun schedulePeriodic(context: Context) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-
-            val request = PeriodicWorkRequestBuilder<SyncWorker>(
-                6, java.util.concurrent.TimeUnit.HOURS
-            )
+            val request = PeriodicWorkRequestBuilder<SyncWorker>(6, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .build()
-
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 "sync_periodic",
                 ExistingPeriodicWorkPolicy.KEEP,

@@ -7,34 +7,51 @@
     android:padding="24dp"
     android:gravity="center"
     android:background= "@drawable/bg_edittext_rounded">
-    <!-- Icon -->
     <ImageView
         android:layout_width="70dp"
         android:layout_height="70dp"
         android:src="@drawable/faceid2"
         android:layout_marginBottom="16dp"/>
 
-    <!-- Tiêu đề -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="CĂN CHỈNH HƯỚNG LÁI"
         android:textSize="20sp"
         android:textStyle="bold"
-        android:textColor="#00BCD4" />
+        android:textColor="@color/brand_primary" />
 
-    <!-- Mô tả hướng dẫn -->
+    <TextView
+        android:id="@+id/tvIconWarning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text= "⚠️ LƯU Ý⚠️"
+        android:textStyle="bold"
+        android:textAlignment="center"
+        android:layout_marginTop="12dp"
+        android:textSize="20sp"
+        android:textColor="@color/text_primary" />
+
+    <TextView
+        android:id="@+id/tvWarning"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Truớc khi sử dụng, hệ thống cần quét và lưu lại hướng nhìn thẳng khi lái xe của tài xế."
+        android:textAlignment="center"
+        android:layout_marginTop="12dp"
+        android:textSize="15sp"
+        android:textColor="@color/text_primary" />
+
     <TextView
         android:id="@+id/tvCalibrationDesc"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Đặt điện thoại cố định trên táp lô hoặc góc bất kỳ, ngồi đúng tư thế lái xe, nhìn thẳng về phía trước rồi nhấn &quot;Bắt đầu ngay&quot;."
+        android:text=" Vui lòng đặt điện thoại cố định trên táp lô hoặc góc bất kỳ mà camera dễ nhận diện được toàn bộ khuôn mặt, ngồi đúng tư thế lái xe, nhìn thẳng về phía trước rồi nhấn &quot;Bắt đầu ngay&quot;."
         android:textAlignment="center"
         android:layout_marginTop="12dp"
         android:textSize="15sp"
-        android:textColor="#333333" />
+        android:textColor="@color/text_primary" />
 
-    <!-- Số đếm ngược lớn -->
     <TextView
         android:id="@+id/tvCountdown"
         android:layout_width="wrap_content"
@@ -42,11 +59,10 @@
         android:text="5"
         android:textSize="64sp"
         android:textStyle="bold"
-        android:textColor="#FF5722"
+        android:textColor="@color/warning"
         android:visibility="gone"
         android:layout_marginTop="16dp" />
 
-    <!-- Progress bar trong khi đếm -->
     <ProgressBar
         android:id="@+id/pbCalibration"
         style="?android:attr/progressBarStyleHorizontal"
@@ -63,7 +79,8 @@
         android:text="Bắt đầu ngay"
         android:textSize="16sp"
         android:textStyle="bold"
-        android:backgroundTint="#00BCD4"
+        android:backgroundTint="@color/brand_primary"
+        android:textColor="@color/on_primary"
         app:cornerRadius="30dp" />
 
 </LinearLayout>
