@@ -2,206 +2,126 @@
 
 # 🚘 DMS — Driver Monitoring System
 
-### Giám sát tài xế theo thời gian thực · Cảnh báo sớm · Hỗ trợ khẩn cấp
+### On-device driver monitoring, intelligent alerts, and emergency assistance
 
 [![Android](https://img.shields.io/badge/Android-8.0%2B-3DDC84?logo=android&logoColor=white)](https://developer.android.com/)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
-[![Firebase](https://img.shields.io/badge/Firebase-Authentication-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-active-00BCD5)](https://github.com/Vudinhdat02/dmsApplication)
+[![Release](https://img.shields.io/github/v/release/Vudinhdat02/dmsApplication?color=00BCD5)](https://github.com/Vudinhdat02/dmsApplication/releases)
 
-**DMS** là hệ thống hỗ trợ giám sát trạng thái người lái bằng camera trước của điện thoại. Ứng dụng phân tích khuôn mặt ngay trên thiết bị, đưa ra cảnh báo tức thời và kết nối với backend riêng để bảo vệ API key, lưu ảnh sự kiện và xử lý các tác vụ trực tuyến.
+**DMS** is an open-source driver monitoring system for Android. It uses the phone's front-facing camera and on-device facial landmark analysis to identify signs of fatigue or distraction, deliver immediate alerts, and coordinate secure online services through a dedicated ASP.NET Core backend.
 
 </div>
 
 ---
 
-## Tổng quan hoạt động
+## System Overview
 
-```mermaid
+~~~mermaid
 flowchart LR
-    A[Camera trước] --> B[Phân tích khuôn mặt]
-    B --> C{Đánh giá trạng thái}
-    C -->|Nguy hiểm| D[Cảnh báo tài xế]
-    C -->|Sự kiện| E[Sao lưu ảnh]
-    F[Cảm biến va chạm + GPS] --> G[Backend DMS]
+    A[Front Camera] --> B[On-device Analysis]
+    B --> C{Driver State}
+    C -->|Risk detected| D[Driver Alert]
+    C -->|Event captured| E[Secure Backup]
+    F[Motion Sensors + GPS] --> G[DMS Backend]
     E --> G
-    G --> H[(Lịch sử 72 giờ)]
-    G --> I[Email khẩn cấp]
-    G --> J[Phân tích AI]
-    J --> K[Gợi ý an toàn]
+    G --> H[(72-hour Storage)]
+    G --> I[Emergency Email]
+    G --> J[AI Safety Insights]
 
     classDef primary fill:#00BCD5,color:#001F29,stroke:#007D8C,stroke-width:2px;
     classDef danger fill:#FFEBEE,color:#B71C1C,stroke:#E53935,stroke-width:2px;
     classDef server fill:#E8F5E9,color:#1B5E20,stroke:#43A047,stroke-width:2px;
-    class A,B,C,E,H,J,K primary;
+    class A,B,C,E,H,J primary;
     class D,I danger;
     class G server;
-```
+~~~
 
-## Tính năng nổi bật
+## Highlights
 
-| Nhóm | Khả năng |
+| Area | Capability |
 |---|---|
-| 👁️ Giám sát | Phát hiện nhắm mắt, ngáp, quay đầu, mất khuôn mặt bằng MediaPipe Face Landmarker |
-| ⚙️ Hiệu chỉnh | Hiệu chỉnh trạng thái khuôn mặt và ngưỡng EAR theo người dùng |
-| 🔊 Cảnh báo | Cảnh báo trực tiếp bằng âm thanh, rung và hiển thị trên màn hình |
-| 🚨 Khẩn cấp | Nhận biết va chạm từ cảm biến gia tốc, lấy vị trí GPS và gửi email cho người liên hệ |
-| 🖼️ Sao lưu | Tải ảnh sự kiện lên backend ngay lập tức; tự thử lại khi mạng gián đoạn |
-| 🕒 Lưu trữ | Phân vùng dữ liệu theo tài khoản và tự động xóa ảnh quá 72 giờ |
-| 📊 Thống kê | Theo dõi lịch sử, hiệu suất lái xe và nhận lời khuyên an toàn từ AI |
-| 🌓 Giao diện | Hỗ trợ Light Mode và Dark Mode theo cài đặt hệ thống |
+| Driver monitoring | Detects prolonged eye closure, yawning, head distraction, and face absence |
+| Personal calibration | Adapts eye-aspect-ratio thresholds to the individual driver |
+| Immediate alerts | Provides audible, visual, and vibration warnings on the device |
+| Emergency assistance | Uses motion sensors and location data to support crash-alert workflows |
+| Secure event backup | Uploads event images through an authenticated backend with offline retry |
+| Data retention | Isolates data by account and automatically removes images older than 72 hours |
+| Driving insights | Presents history, statistics, and AI-assisted safety recommendations |
+| Adaptive interface | Supports system Light and Dark themes |
 
-## Kiến trúc
+## Architecture
 
-### Android
+### Android Application
 
-- **Kotlin**, Android SDK 26+ và kiến trúc MVVM.
-- **CameraX** thu nhận khung hình từ camera trước.
-- **MediaPipe Face Landmarker** xác định các điểm đặc trưng khuôn mặt.
-- **EAR, MAR và Head Pose** đánh giá mắt, miệng và hướng đầu.
-- **Room** lưu dữ liệu cục bộ; **WorkManager** đồng bộ lại khi có mạng.
-- **Firebase Authentication/Firestore** quản lý tài khoản và người liên hệ.
-- **Retrofit, OkHttp và Glide** giao tiếp API và tải ảnh có xác thực.
+- Kotlin with Android SDK 26+ and an MVVM-oriented structure.
+- CameraX for front-camera frame capture.
+- MediaPipe Face Landmarker for on-device facial landmark inference.
+- EAR, MAR, and head-pose heuristics for driver-state assessment.
+- Room for local persistence and WorkManager for resilient background synchronization.
+- Firebase Authentication and Firestore for identity and account-related data.
+- Retrofit, OkHttp, and Glide for authenticated backend communication and image delivery.
 
 ### Backend
 
-- **ASP.NET Core .NET 10** với REST API và Swagger trong môi trường Development.
-- Xác thực mọi API riêng tư bằng **Firebase ID Token**.
-- Giới hạn tần suất gọi API, kích thước ảnh và kiểm tra định dạng file.
-- **SQLite + hệ thống file** lưu metadata và ảnh riêng theo Firebase UID.
-- **Groq** cung cấp phân tích AI; **Brevo** gửi email cảnh báo khẩn cấp.
-- API key được lưu bằng **.NET User Secrets**, không nằm trong source code.
+- ASP.NET Core on .NET 10 with a REST API.
+- Firebase ID token validation for protected endpoints.
+- Rate limiting, upload-size limits, and file-type validation.
+- SQLite metadata with account-isolated image storage.
+- Background cleanup for the 72-hour retention policy.
+- Server-side integration with Groq and Brevo so provider API keys are never embedded in the Android application.
 
-Chi tiết backend: [DMSServer/DMSbackend/README.md](DMSServer/DMSbackend/README.md)
+Backend documentation is available in [DMSServer/DMSbackend/README.md](DMSServer/DMSbackend/README.md).
 
-## Cấu trúc repository
+## Repository Layout
 
-```text
+~~~text
 dmsApplication/
-├── app/                         # Ứng dụng Android
+├── app/                         # Android application
 │   └── src/main/
-│       ├── java/.../data/       # Room, repository và API client
-│       ├── java/.../ml/         # Phân tích khuôn mặt và thuật toán DMS
-│       ├── java/.../ui/         # Activity, Fragment và ViewModel
-│       └── res/                 # Layout, theme, màu sắc và tài nguyên
+│       ├── java/.../data/       # Local storage, repositories, and API clients
+│       ├── java/.../ml/         # Facial analysis and DMS algorithms
+│       ├── java/.../ui/         # Activities, fragments, and view models
+│       ├── assets/              # On-device model asset
+│       └── res/                 # Layouts, themes, and Android resources
 ├── DMSServer/
-│   └── DMSbackend/              # Backend ASP.NET Core
-│       ├── Controllers/         # AI, cảnh báo, ảnh và health check
-│       ├── Services/            # Groq, Brevo, Firestore và dọn ảnh
-│       ├── Data/                # Entity Framework Core + SQLite
-│       └── Program.cs           # Cấu hình ứng dụng và bảo mật
-├── face_landmarker.task         # Mô hình MediaPipe
-└── gradle/                      # Cấu hình build Android
-```
+│   └── DMSbackend/              # ASP.NET Core backend
+├── docs/                        # Model and technical documentation
+├── scripts/                     # Cross-platform build helpers
+└── gradle/                      # Android build configuration
+~~~
 
-## Yêu cầu phát triển
+## Documentation
 
-- JDK 17 và Android SDK; Android Studio là tùy chọn.
-- Android SDK 26 trở lên; compile SDK 36.
-- .NET SDK 10; Visual Studio 2022 là tùy chọn.
-- Firebase project, Groq API key và Brevo API key.
+- [Building from source](BUILDING.md)
+- [Backend configuration](DMSServer/DMSbackend/README.md)
+- [Dependencies and bundling](DEPENDENCIES.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Model card](docs/MODEL_CARD.md)
+- [Contribution guidelines](CONTRIBUTING.md)
+- [Changelog](CHANGELOG.md)
 
-## Bắt đầu nhanh
+## Security and Privacy
 
-### 1. Clone repository
+- Provider API keys are stored by the backend through user secrets or environment configuration and are not included in the APK.
+- The Android application authenticates backend requests with Firebase ID tokens.
+- Image access is scoped to the authenticated account.
+- Event images are retained for no longer than 72 hours by the backend cleanup policy.
+- Signing keys, local configuration, databases, uploaded images, certificates, and secret files are excluded from version control.
+- Facial landmark inference runs on the Android device; see the [model card](docs/MODEL_CARD.md) for limitations and provenance.
 
-```bash
-git clone https://github.com/Vudinhdat02/dmsApplication.git
-cd dmsApplication
-```
+## Open-Source License
 
-### 2. Cấu hình backend
-
-Mở terminal tại `DMSServer/DMSbackend`:
-
-```powershell
-dotnet user-secrets set "Groq:ApiKey" "YOUR_GROQ_API_KEY"
-dotnet user-secrets set "Brevo:ApiKey" "YOUR_BREVO_API_KEY"
-dotnet user-secrets set "Brevo:SenderEmail" "YOUR_VERIFIED_SENDER_EMAIL"
-```
-
-Chạy backend bằng lệnh dotnet run --project DMSServer/DMSbackend/DMSbackend.csproj; hoặc mở solution bằng Visual Studio và nhấn **F5**.
-
-- Health check: `http://localhost:5078/health`
-- Swagger: `http://localhost:5078/swagger`
-
-### 3. Cấu hình Android
-
-Đặt file Firebase `google-services.json` vào thư mục `app/`. Thêm URL backend vào `local.properties`:
-
-```properties
-SERVER_BASE_URL=https://your-server-or-dev-tunnel.example/
-```
-
-Với Android Emulator và backend chạy trên cùng máy:
-
-```properties
-SERVER_BASE_URL=http://10.0.2.2:5078/
-```
-
-Build ứng dụng:
-
-```powershell
-./gradlew.bat assembleDebug
-```
-
-APK được tạo tại `app/build/outputs/apk/debug/app-debug.apk`.
-
-Hướng dẫn đầy đủ cho Windows, Linux/macOS, cấu hình release và build sạch: [BUILDING.md](BUILDING.md).
-
-## API chính
-
-| Method | Endpoint | Mô tả | Xác thực |
-|---|---|---|---|
-| `GET` | `/health` | Kiểm tra trạng thái backend | Không |
-| `POST` | `/api/analyze-driving` | Phân tích dữ liệu lái xe bằng AI | Firebase JWT |
-| `POST` | `/api/send-crash-alert` | Gửi cảnh báo khẩn cấp | Firebase JWT |
-| `POST` | `/api/images/upload` | Sao lưu ảnh sự kiện | Firebase JWT |
-| `GET` | `/api/images` | Danh sách ảnh của tài khoản | Firebase JWT |
-| `GET` | `/api/images/{id}` | Xem ảnh thuộc tài khoản | Firebase JWT |
-| `DELETE` | `/api/images/{id}` | Xóa ảnh thuộc tài khoản | Firebase JWT |
-
-## Bảo mật và quyền riêng tư
-
-- Không nhúng Groq, Brevo hoặc khóa backend vào APK.
-- App gửi Firebase ID Token trong header `Authorization: Bearer`.
-- Backend chỉ cho phép người dùng truy cập ảnh thuộc UID của chính họ.
-- Ảnh quá 72 giờ được dọn tự động ở phía server.
-- `App_Data`, database, ảnh, certificate, `.env` và `secrets.json` đều bị Git bỏ qua.
-- Không commit nội dung của `local.properties` hoặc .NET User Secrets.
-
-## Kiểm thử
-
-```powershell
-# Kiểm tra build Android
-./gradlew.bat assembleDebug
-
-# Kiểm tra build backend
-dotnet build DMSServer/DMSbackend.slnx
-```
-
-Repository hiện chưa có bộ kiểm thử tự động hoàn chỉnh. Xem trạng thái thực tế tại [TESTING.md](TESTING.md).
-
-## Đóng góp
-
-1. Tạo branch từ `master`.
-2. Thực hiện thay đổi và kiểm tra cả Android lẫn backend.
-3. Không commit API key, dữ liệu người dùng hoặc file build.
-4. Mở Pull Request kèm mô tả và kết quả kiểm thử.
-
-## Giấy phép
-
-Mã nguồn do dự án DMS phát triển được phát hành theo [Apache License 2.0](LICENSE). Xem [NOTICE](NOTICE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) và [docs/MODEL_CARD.md](docs/MODEL_CARD.md) trước khi phân phối lại ứng dụng hoặc model đi kèm.
+Project-owned source code is licensed under the [Apache License 2.0](LICENSE). Third-party libraries, services, and model assets remain subject to their respective terms; see [NOTICE](NOTICE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 > [!IMPORTANT]
-> DMS là dự án hỗ trợ nghiên cứu và cảnh báo. Hệ thống không thay thế sự tập trung của người lái, thiết bị an toàn được chứng nhận hoặc dịch vụ cứu hộ chuyên nghiệp.
+> DMS is a research and driver-assistance project. It does not replace attentive driving, certified vehicle safety systems, emergency services, or professional medical advice.
 
 ---
 
 <div align="center">
 
-Phát triển với mục tiêu ứng dụng AI để nâng cao an toàn giao thông.
+Built to explore practical, privacy-aware AI for safer driving.
 
 </div>
