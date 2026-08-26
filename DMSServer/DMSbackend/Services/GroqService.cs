@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;

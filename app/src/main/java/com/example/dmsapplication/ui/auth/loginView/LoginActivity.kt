@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 package com.example.dmsapplication.ui.auth.loginView
 import android.content.Intent
 import android.os.Bundle

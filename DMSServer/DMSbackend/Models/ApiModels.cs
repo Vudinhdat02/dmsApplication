@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 using System.ComponentModel.DataAnnotations;
 
 namespace DMSbackend.Models;

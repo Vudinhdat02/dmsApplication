@@ -4,6 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>dms-backend-2026</UserSecretsId>
+    <Authors>Vudinhdat02</Authors>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/Vudinhdat02/dmsApplication</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>

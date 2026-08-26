@@ -1,5 +1,15 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 import java.util.Properties
 import java.io.FileInputStream
+
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use(::load)
+    }
+}
 
 plugins {
     alias(libs.plugins.android.application)
@@ -24,9 +34,9 @@ android {
         minSdk = 26
         targetSdk = 35
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.0"
 
-        testInstrumentationRunner = "com.example.dmsapplication.TestRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Đọc file local.properties
         val properties = Properties()
@@ -42,8 +52,22 @@ android {
         buildConfigField("String", "SERVER_BASE_URL", "\"$serverBaseUrl\"")
     }
 
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -105,7 +129,6 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
-    implementation("com.google.firebase:firebase-storage:20.3.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
     implementation("com.google.android.gms:play-services-auth:21.2.0")
 
@@ -142,49 +165,10 @@ dependencies {
     implementation(libs.androidx.lifecycle.livedata.ktx)
     implementation("androidx.fragment:fragment-ktx:1.6.2")
 
-    // Google Gemini AI
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
-
     // Khác
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("com.github.bumptech.glide:glide:4.16.0")
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
-
-    // ========================================
-    // ANDROID TESTING DEPENDENCIES
-    // ========================================
-
-    // AndroidX Test - Core
-    androidTestImplementation("androidx.test:core:1.5.0")
-    androidTestImplementation("androidx.test:core-ktx:1.5.0")
-    androidTestImplementation("androidx.test:runner:1.5.2")
-    androidTestImplementation("androidx.test:rules:1.5.0")
-
-    // AndroidX Test - JUnit
-    androidTestImplementation("androidx.test.ext:junit:1.1.5")
-    androidTestImplementation("androidx.test.ext:junit-ktx:1.1.5")
-
-    // Espresso
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
-    androidTestImplementation("androidx.test.espresso:espresso-contrib:3.5.1")
-    androidTestImplementation("androidx.test.espresso:espresso-intents:3.5.1")
-
-    // Mockito
-    androidTestImplementation("org.mockito:mockito-core:5.3.1")
-    androidTestImplementation("org.mockito:mockito-android:5.3.1")
-    androidTestImplementation("org.mockito.kotlin:mockito-kotlin:5.1.0")
-
-    // Coroutines Test
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-
-    // Fragment Testing
-    debugImplementation("androidx.fragment:fragment-testing:1.6.2")
-
-    // UI Automator
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
-
-    // Truth
-    androidTestImplementation("com.google.truth:truth:1.1.5")
 }

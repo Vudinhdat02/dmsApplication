@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 using DMSbackend.Data;
 using DMSbackend.Options;
 using Microsoft.EntityFrameworkCore;

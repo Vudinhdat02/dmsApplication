@@ -34,3 +34,15 @@ local.properties
 /DMSServer/**/*.pfx
 /DMSServer/**/*.key
 /DMSServer/**/*.pem
+
+# Android release signing (never commit private signing material)
+/keystore.properties
+/.signing/
+*.jks
+*.keystore
+
+# Local signed APK exports
+/release/
+
+# Local backend publish output
+/publish/

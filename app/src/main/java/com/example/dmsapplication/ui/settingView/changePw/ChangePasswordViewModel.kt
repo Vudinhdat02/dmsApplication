@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Vudinhdat02
+
 package com.example.dmsapplication.ui.settingView.password
 
 import androidx.lifecycle.LiveData

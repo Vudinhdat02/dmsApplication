@@ -8,6 +8,7 @@
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.2.10-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org/)
 [![.NET](https://img.shields.io/badge/.NET-10.0-512BD4?logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
 [![Firebase](https://img.shields.io/badge/Firebase-Authentication-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com/)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-active-00BCD5)](https://github.com/Vudinhdat02/dmsApplication)
 
 **DMS** là hệ thống hỗ trợ giám sát trạng thái người lái bằng camera trước của điện thoại. Ứng dụng phân tích khuôn mặt ngay trên thiết bị, đưa ra cảnh báo tức thời và kết nối với backend riêng để bảo vệ API key, lưu ảnh sự kiện và xử lý các tác vụ trực tuyến.
@@ -97,10 +98,9 @@ dmsApplication/
 
 ## Yêu cầu phát triển
 
-- Android Studio với JDK 17.
+- JDK 17 và Android SDK; Android Studio là tùy chọn.
 - Android SDK 26 trở lên; compile SDK 36.
-- Visual Studio 2022 có workload **ASP.NET and web development**.
-- .NET SDK 10.
+- .NET SDK 10; Visual Studio 2022 là tùy chọn.
 - Firebase project, Groq API key và Brevo API key.
 
 ## Bắt đầu nhanh
@@ -122,7 +122,7 @@ dotnet user-secrets set "Brevo:ApiKey" "YOUR_BREVO_API_KEY"
 dotnet user-secrets set "Brevo:SenderEmail" "YOUR_VERIFIED_SENDER_EMAIL"
 ```
 
-Sau đó mở `DMSServer/DMSbackend.slnx` bằng Visual Studio và nhấn **F5**.
+Chạy backend bằng lệnh dotnet run --project DMSServer/DMSbackend/DMSbackend.csproj; hoặc mở solution bằng Visual Studio và nhấn **F5**.
 
 - Health check: `http://localhost:5078/health`
 - Swagger: `http://localhost:5078/swagger`
@@ -148,6 +148,8 @@ Build ứng dụng:
 ```
 
 APK được tạo tại `app/build/outputs/apk/debug/app-debug.apk`.
+
+Hướng dẫn đầy đủ cho Windows, Linux/macOS, cấu hình release và build sạch: [BUILDING.md](BUILDING.md).
 
 ## API chính
 
@@ -180,12 +182,18 @@ APK được tạo tại `app/build/outputs/apk/debug/app-debug.apk`.
 dotnet build DMSServer/DMSbackend.slnx
 ```
 
+Repository hiện chưa có bộ kiểm thử tự động hoàn chỉnh. Xem trạng thái thực tế tại [TESTING.md](TESTING.md).
+
 ## Đóng góp
 
 1. Tạo branch từ `master`.
 2. Thực hiện thay đổi và kiểm tra cả Android lẫn backend.
 3. Không commit API key, dữ liệu người dùng hoặc file build.
 4. Mở Pull Request kèm mô tả và kết quả kiểm thử.
+
+## Giấy phép
+
+Mã nguồn do dự án DMS phát triển được phát hành theo [Apache License 2.0](LICENSE). Xem [NOTICE](NOTICE), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) và [docs/MODEL_CARD.md](docs/MODEL_CARD.md) trước khi phân phối lại ứng dụng hoặc model đi kèm.
 
 > [!IMPORTANT]
 > DMS là dự án hỗ trợ nghiên cứu và cảnh báo. Hệ thống không thay thế sự tập trung của người lái, thiết bị an toàn được chứng nhận hoặc dịch vụ cứu hộ chuyên nghiệp.
