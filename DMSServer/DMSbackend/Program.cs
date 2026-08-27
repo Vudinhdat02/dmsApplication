@@ -63,6 +63,7 @@ builder.Services.AddHttpClient<FirestoreContactsService>(client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddHostedService<ImageCleanupService>();
+builder.Services.AddHostedService<DevTunnelHostedService>();
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
