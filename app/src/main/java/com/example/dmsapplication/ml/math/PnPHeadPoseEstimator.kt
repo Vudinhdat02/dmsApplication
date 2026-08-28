@@ -81,13 +81,15 @@ object PnPHeadPoseEstimator {
             Calib3d.Rodrigues(rotationVector, rotationMatrix)
             val r00 = rotationMatrix.get(0, 0)[0]
             val r10 = rotationMatrix.get(1, 0)[0]
-            val r20 = rotationMatrix.get(2, 0)[0]
-            val r21 = rotationMatrix.get(2, 1)[0]
-            val r22 = rotationMatrix.get(2, 2)[0]
-            val singularity = sqrt(r00 * r00 + r10 * r10)
+            val forwardX = rotationMatrix.get(0, 2)[0]
+            val forwardY = rotationMatrix.get(1, 2)[0]
+            val forwardZ = rotationMatrix.get(2, 2)[0]
+            val horizontalLength = sqrt(forwardX * forwardX + forwardZ * forwardZ)
 
-            val pitch = atan2(r21, r22)
-            val yaw = atan2(-r20, singularity)
+            // Deriving yaw/pitch from the head forward vector is more stable near the Euler
+            // decomposition boundary. The calibrated angular difference handles ±180° wrap.
+            val yaw = atan2(forwardX, forwardZ)
+            val pitch = atan2(-forwardY, horizontalLength)
             val roll = atan2(r10, r00)
             val degrees = 180.0 / Math.PI
             HeadAngles(

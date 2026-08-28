@@ -43,6 +43,7 @@ import com.example.dmsapplication.ui.homeView.helper.OverlayView
 import com.example.dmsapplication.utils.CrashDetector
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import kotlinx.coroutines.launch
 import org.opencv.android.OpenCVLoader
@@ -77,6 +78,9 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var switchComparisonMode: SwitchCompat
     private lateinit var baselineComparisonCard: CardView
     private lateinit var baselineChart: BaselineComparisonChartView
+    private lateinit var comparisonModeGroup: MaterialButtonToggleGroup
+    private lateinit var tvComparisonPrimaryLegend: TextView
+    private lateinit var tvComparisonBaselineLegend: TextView
     private var baselineRecorder: BaselineComparisonRecorder? = null
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
     @Volatile private var latestPnpAngles: PnPHeadPoseEstimator.HeadAngles? = null
@@ -159,6 +163,20 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         baselineComparisonCard = view.findViewById(R.id.baselineComparisonCard)
         baselineChart = view.findViewById(R.id.baselineComparisonChart)
+        comparisonModeGroup = view.findViewById(R.id.comparisonModeGroup)
+        tvComparisonPrimaryLegend = view.findViewById(R.id.tvComparisonPrimaryLegend)
+        tvComparisonBaselineLegend = view.findViewById(R.id.tvComparisonBaselineLegend)
+        comparisonModeGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked) return@addOnButtonCheckedListener
+            val mode = when (checkedId) {
+                R.id.btnComparisonMouth -> BaselineComparisonChartView.Mode.MOUTH
+                R.id.btnComparisonHead -> BaselineComparisonChartView.Mode.HEAD
+                else -> BaselineComparisonChartView.Mode.EYE
+            }
+            updateComparisonChartMode(mode)
+        }
+        comparisonModeGroup.check(R.id.btnComparisonEye)
+        updateComparisonChartMode(BaselineComparisonChartView.Mode.EYE)
         switchComparisonMode = view.findViewById<SwitchCompat>(R.id.switchComparisonMode).apply {
             isChecked = viewModel.isComparisonModeEnabled.value
             setOnCheckedChangeListener { _, isChecked ->
@@ -336,6 +354,33 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         }
     }
+    private fun updateComparisonChartMode(mode: BaselineComparisonChartView.Mode) {
+        baselineChart.setMode(mode)
+        when (mode) {
+            BaselineComparisonChartView.Mode.EYE -> {
+                tvComparisonPrimaryLegend.text = "● EAR 3D"
+                tvComparisonBaselineLegend.text = "● EAR 2D"
+                tvComparisonBaselineLegend.setTextColor(
+                    ContextCompat.getColor(requireContext(), R.color.warning)
+                )
+            }
+            BaselineComparisonChartView.Mode.MOUTH -> {
+                tvComparisonPrimaryLegend.text = "● MAR 3D"
+                tvComparisonBaselineLegend.text = "● MAR 2D"
+                tvComparisonBaselineLegend.setTextColor(
+                    ContextCompat.getColor(requireContext(), R.color.warning)
+                )
+            }
+            BaselineComparisonChartView.Mode.HEAD -> {
+                tvComparisonPrimaryLegend.text = "● Z-depth"
+                tvComparisonBaselineLegend.text = "● PnP"
+                tvComparisonBaselineLegend.setTextColor(
+                    ContextCompat.getColor(requireContext(), R.color.accent_purple)
+                )
+            }
+        }
+    }
+
     private fun updateBorderAndAlarm() {
         val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
         cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), if (isAlert) R.color.danger else R.color.success))

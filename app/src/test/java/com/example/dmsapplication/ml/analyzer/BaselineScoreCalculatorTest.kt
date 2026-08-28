@@ -10,31 +10,26 @@ import org.junit.Test
 class BaselineScoreCalculatorTest {
     @Test
     fun scoreEqualsOneAtEachThreshold() {
-        val proposed = BaselineScoreCalculator.proposedScore(
-            ear3D = 0.16f,
-            earThreshold = 0.16f,
-            mar3D = 0.38f,
-            marThreshold = 0.38f,
-            relativeHeadScore = 1f
-        )
-        val baseline2D = BaselineScoreCalculator.earMar2DScore(
-            ear2D = 0.20f,
-            earThreshold = 0.20f,
-            mar2D = 0.38f,
-            marThreshold = 0.38f
-        )
-
-        assertEquals(1f, proposed, 0.0001f)
-        assertEquals(1f, baseline2D, 0.0001f)
+        assertEquals(1f, BaselineScoreCalculator.eyeScore(0.16f, 0.16f), 0.0001f)
+        assertEquals(1f, BaselineScoreCalculator.mouthScore(0.38f, 0.38f), 0.0001f)
     }
 
     @Test
     fun lowerEarProducesHigherAlertScore() {
-        val openEyeScore = BaselineScoreCalculator.inverseThresholdScore(0.20f, 0.30f)
-        val closedEyeScore = BaselineScoreCalculator.inverseThresholdScore(0.20f, 0.10f)
+        val openEyeScore = BaselineScoreCalculator.eyeScore(0.30f, 0.20f)
+        val closedEyeScore = BaselineScoreCalculator.eyeScore(0.10f, 0.20f)
 
         assertTrue(openEyeScore < 1f)
         assertTrue(closedEyeScore > 1f)
+    }
+
+    @Test
+    fun largerMarProducesHigherAlertScore() {
+        val closedMouthScore = BaselineScoreCalculator.mouthScore(0.20f, 0.38f)
+        val openMouthScore = BaselineScoreCalculator.mouthScore(0.60f, 0.38f)
+
+        assertTrue(closedMouthScore < 1f)
+        assertTrue(openMouthScore > 1f)
     }
 
     @Test
@@ -48,5 +43,25 @@ class BaselineScoreCalculatorTest {
         )
 
         assertEquals(1.4f, score, 0.0001f)
+    }
+
+    @Test
+    fun angleDifferenceWrapsAcrossMinusAndPlus180Degrees() {
+        val difference = BaselineScoreCalculator.normalizedAngleDifferenceDegrees(
+            current = -179f,
+            baseline = 179f
+        )
+
+        assertEquals(2f, difference, 0.0001f)
+    }
+
+    @Test
+    fun angleDifferenceUsesShortestRegularPath() {
+        val difference = BaselineScoreCalculator.normalizedAngleDifferenceDegrees(
+            current = 35f,
+            baseline = 15f
+        )
+
+        assertEquals(20f, difference, 0.0001f)
     }
 }

@@ -3,7 +3,15 @@
 
 package com.example.dmsapplication.ml.analyzer
 
+import kotlin.math.abs
+
 object BaselineScoreCalculator {
+    fun eyeScore(ear: Float, threshold: Float): Float =
+        if (threshold > 0f && ear > 0.000001f) threshold / ear else 0f
+
+    fun mouthScore(mar: Float, threshold: Float): Float =
+        if (threshold > 0f) (mar / threshold).coerceAtLeast(0f) else 0f
+
     fun proposedScore(
         ear3D: Float,
         earThreshold: Float,
@@ -11,8 +19,8 @@ object BaselineScoreCalculator {
         marThreshold: Float,
         relativeHeadScore: Float
     ): Float = maxOf(
-        inverseThresholdScore(earThreshold, ear3D),
-        ratioScore(mar3D, marThreshold),
+        eyeScore(ear3D, earThreshold),
+        mouthScore(mar3D, marThreshold),
         relativeHeadScore.coerceAtLeast(0f)
     )
 
@@ -22,13 +30,12 @@ object BaselineScoreCalculator {
         mar2D: Float,
         marThreshold: Float
     ): Float = maxOf(
-        inverseThresholdScore(earThreshold, ear2D),
-        ratioScore(mar2D, marThreshold)
+        eyeScore(ear2D, earThreshold),
+        mouthScore(mar2D, marThreshold)
     )
 
-    fun inverseThresholdScore(threshold: Float, value: Float): Float =
-        if (threshold > 0f && value > 0.000001f) threshold / value else 0f
-
-    private fun ratioScore(value: Float, threshold: Float): Float =
-        if (threshold > 0f) (value / threshold).coerceAtLeast(0f) else 0f
+    fun normalizedAngleDifferenceDegrees(current: Float, baseline: Float): Float {
+        val wrapped = ((current - baseline + 180f) % 360f + 360f) % 360f - 180f
+        return abs(wrapped)
+    }
 }

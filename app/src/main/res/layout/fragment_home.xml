@@ -216,11 +216,11 @@
     <androidx.cardview.widget.CardView
         android:id="@+id/baselineComparisonCard"
         android:layout_width="0dp"
-        android:layout_height="176dp"
-        android:visibility="gone"
+        android:layout_height="215dp"
         android:layout_marginStart="16dp"
         android:layout_marginTop="12dp"
         android:layout_marginEnd="16dp"
+        android:visibility="gone"
         app:cardBackgroundColor="@color/surface"
         app:cardCornerRadius="14dp"
         app:cardElevation="2dp"
@@ -240,10 +240,54 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Baseline comparison · threshold = 1"
+                android:text="So sánh theo tác vụ · ngưỡng = 1"
                 android:textColor="@color/text_primary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/comparisonModeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                app:checkedButton="@id/btnComparisonEye"
+                app:selectionRequired="true"
+                app:singleSelection="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnComparisonEye"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:text="Mắt"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnComparisonMouth"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:text="Miệng"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnComparisonHead"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:minHeight="0dp"
+                    android:text="Đầu"
+                    android:textAllCaps="false"
+                    android:textSize="12sp" />
+
+            </com.google.android.material.button.MaterialButtonToggleGroup>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -253,27 +297,21 @@
                 android:orientation="horizontal">
 
                 <TextView
+                    android:id="@+id/tvComparisonPrimaryLegend"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="● 3D/Z"
+                    android:text="● EAR 3D"
                     android:textColor="@color/brand_primary"
                     android:textSize="11sp" />
 
                 <TextView
+                    android:id="@+id/tvComparisonBaselineLegend"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="● EAR/MAR 2D"
+                    android:text="● EAR 2D"
                     android:textColor="@color/warning"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="● PnP"
-                    android:textColor="@color/accent_purple"
                     android:textSize="11sp" />
 
             </LinearLayout>
@@ -290,7 +328,6 @@
         </LinearLayout>
 
     </androidx.cardview.widget.CardView>
-
     <androidx.core.widget.NestedScrollView
         android:id="@+id/settingsScrollView"
         android:layout_width="0dp"

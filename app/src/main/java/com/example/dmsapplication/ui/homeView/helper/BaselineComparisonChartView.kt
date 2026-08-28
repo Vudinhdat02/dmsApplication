@@ -8,19 +8,26 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.os.SystemClock
 import android.util.AttributeSet
+import android.util.TypedValue
 import android.view.View
 import androidx.core.content.ContextCompat
 import com.example.dmsapplication.R
 import com.example.dmsapplication.ml.analyzer.BaselineComparisonSample
 
 /**
- * Rolling visualization of threshold-normalized scores. It is a UI aid, not an accuracy chart.
- * A score of 1.0 means the corresponding method has reached its alert threshold.
+ * Rolling visualization of matched, threshold-normalized methods for one task at a time.
+ * A score of 1.0 means that the selected method has reached its detection threshold.
  */
 class BaselineComparisonChartView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null
 ) : View(context, attrs) {
+    enum class Mode {
+        EYE,
+        MOUTH,
+        HEAD
+    }
+
     companion object {
         private const val MAX_SAMPLES = 150
         private const val MAX_SCORE = 2f
@@ -28,12 +35,16 @@ class BaselineComparisonChartView @JvmOverloads constructor(
     }
 
     private data class ChartPoint(
-        val proposed: Float,
-        val earMar2D: Float,
-        val pnp: Float?
+        val eye3D: Float,
+        val eye2D: Float,
+        val mar3D: Float,
+        val mar2D: Float,
+        val relativeHead: Float,
+        val pnpHead: Float?
     )
 
     private val points = ArrayDeque<ChartPoint>(MAX_SAMPLES)
+    private var mode = Mode.EYE
     private var lastUiUpdateMs = 0L
     private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
@@ -48,7 +59,17 @@ class BaselineComparisonChartView @JvmOverloads constructor(
     }
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = ContextCompat.getColor(context, R.color.text_muted)
-        textSize = resources.displayMetrics.scaledDensity * 10f
+        textSize = TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_SP,
+            10f,
+            resources.displayMetrics
+        )
+    }
+
+    fun setMode(newMode: Mode) {
+        if (mode == newMode) return
+        mode = newMode
+        invalidate()
     }
 
     fun addSample(sample: BaselineComparisonSample) {
@@ -59,9 +80,12 @@ class BaselineComparisonChartView @JvmOverloads constructor(
         if (points.size >= MAX_SAMPLES) points.removeFirst()
         points.addLast(
             ChartPoint(
-                proposed = sample.proposedScore.coerceIn(0f, MAX_SCORE),
-                earMar2D = sample.earMar2DScore.coerceIn(0f, MAX_SCORE),
-                pnp = sample.pnpScore?.coerceIn(0f, MAX_SCORE)
+                eye3D = sample.eye3DScore,
+                eye2D = sample.eye2DScore,
+                mar3D = sample.mar3DScore,
+                mar2D = sample.mar2DScore,
+                relativeHead = sample.relativeHeadScore,
+                pnpHead = sample.pnpScore
             )
         )
         invalidate()
@@ -90,9 +114,29 @@ class BaselineComparisonChartView @JvmOverloads constructor(
         }
 
         val snapshot = points.toList()
-        drawSeries(canvas, snapshot.map { it.proposed }, left, right, top, bottom, R.color.brand_primary)
-        drawSeries(canvas, snapshot.map { it.earMar2D }, left, right, top, bottom, R.color.warning)
-        drawSeries(canvas, snapshot.map { it.pnp }, left, right, top, bottom, R.color.accent_purple)
+        val primaryValues: List<Float?>
+        val baselineValues: List<Float?>
+        val baselineColor: Int
+        when (mode) {
+            Mode.EYE -> {
+                primaryValues = snapshot.map { it.eye3D }
+                baselineValues = snapshot.map { it.eye2D }
+                baselineColor = R.color.warning
+            }
+            Mode.MOUTH -> {
+                primaryValues = snapshot.map { it.mar3D }
+                baselineValues = snapshot.map { it.mar2D }
+                baselineColor = R.color.warning
+            }
+            Mode.HEAD -> {
+                primaryValues = snapshot.map { it.relativeHead }
+                baselineValues = snapshot.map { it.pnpHead }
+                baselineColor = R.color.accent_purple
+            }
+        }
+
+        drawSeries(canvas, primaryValues, left, right, top, bottom, R.color.brand_primary)
+        drawSeries(canvas, baselineValues, left, right, top, bottom, baselineColor)
     }
 
     private fun drawGuide(
@@ -105,7 +149,12 @@ class BaselineComparisonChartView @JvmOverloads constructor(
     ) {
         val y = valueToY(value, top, bottom)
         canvas.drawLine(left, y, right, y, gridPaint)
-        canvas.drawText(String.format(java.util.Locale.US, "%.0f", value), paddingLeft.toFloat(), y + 4f, labelPaint)
+        canvas.drawText(
+            String.format(java.util.Locale.US, "%.0f", value),
+            paddingLeft.toFloat(),
+            y + 4f,
+            labelPaint
+        )
     }
 
     private fun drawSeries(

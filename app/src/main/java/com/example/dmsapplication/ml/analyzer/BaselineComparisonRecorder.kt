@@ -39,7 +39,8 @@ class BaselineComparisonRecorder(context: Context) : Closeable {
                 write(
                     "session_id,timestamp_ms,ear_3d,ear_2d,mar_3d,mar_2d," +
                         "relative_yaw,relative_pitch,pnp_yaw_deg,pnp_pitch_deg," +
-                        "proposed_score,ear_mar_2d_score,pnp_score," +
+                        "eye_3d_score,eye_2d_score,mar_3d_score,mar_2d_score," +
+                        "relative_head_score,proposed_score,ear_mar_2d_score,pnp_score," +
                         "proposed_latency_ms,ear_mar_2d_latency_ms,pnp_latency_ms," +
                         "proposed_threshold_exceeded,ear_mar_2d_threshold_exceeded," +
                         "pnp_threshold_exceeded"
@@ -73,6 +74,11 @@ class BaselineComparisonRecorder(context: Context) : Closeable {
                         number(sample.relativePitch),
                         number(sample.pnpYawDegrees),
                         number(sample.pnpPitchDegrees),
+                        number(sample.eye3DScore),
+                        number(sample.eye2DScore),
+                        number(sample.mar3DScore),
+                        number(sample.mar2DScore),
+                        number(sample.relativeHeadScore),
                         number(sample.proposedScore),
                         number(sample.earMar2DScore),
                         number(sample.pnpScore),

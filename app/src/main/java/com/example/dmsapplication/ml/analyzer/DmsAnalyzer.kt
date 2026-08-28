@@ -183,21 +183,16 @@ class DmsAnalyzer(
         updateHeadState(isHeadOff, nowMs)
         updateYawnState(isYawningNow, nowMs)
 
+        val eye3DScore = BaselineScoreCalculator.eyeScore(smoothedEar3D, earThreshold)
+        val eye2DScore =
+            BaselineScoreCalculator.eyeScore(smoothedEar2D, DEFAULT_2D_EAR_THRESHOLD)
+        val mar3DScore = BaselineScoreCalculator.mouthScore(mar3D, marThreshold)
+        val mar2DScore =
+            BaselineScoreCalculator.mouthScore(mar2D, DEFAULT_2D_MAR_THRESHOLD)
         val relativeHeadScore = calibrationManager.relativeHeadScore(relativeHeadAngles)
-        val proposedScore = BaselineScoreCalculator.proposedScore(
-            ear3D = smoothedEar3D,
-            earThreshold = earThreshold,
-            mar3D = mar3D,
-            marThreshold = marThreshold,
-            relativeHeadScore = relativeHeadScore
-        )
-        val earMar2DScore = BaselineScoreCalculator.earMar2DScore(
-            ear2D = smoothedEar2D,
-            earThreshold = DEFAULT_2D_EAR_THRESHOLD,
-            mar2D = mar2D,
-            marThreshold = DEFAULT_2D_MAR_THRESHOLD
-        )
         val pnpScore = calibrationManager.pnpHeadScore(pnpAngles)
+        val proposedScore = maxOf(eye3DScore, mar3DScore, relativeHeadScore)
+        val earMar2DScore = maxOf(eye2DScore, mar2DScore)
 
         onComparisonSample(
             BaselineComparisonSample(
@@ -210,6 +205,11 @@ class DmsAnalyzer(
                 relativePitch = relativeHeadAngles?.pitch,
                 pnpYawDegrees = pnpAngles?.yawDegrees,
                 pnpPitchDegrees = pnpAngles?.pitchDegrees,
+                eye3DScore = eye3DScore,
+                eye2DScore = eye2DScore,
+                mar3DScore = mar3DScore,
+                mar2DScore = mar2DScore,
+                relativeHeadScore = relativeHeadScore,
                 proposedScore = proposedScore,
                 earMar2DScore = earMar2DScore,
                 pnpScore = pnpScore,
