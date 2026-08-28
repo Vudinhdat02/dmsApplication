@@ -40,6 +40,9 @@ class DmsAnalyzer(
     var isYawnMode: Boolean = true
 
     @Volatile
+    var comparisonModeEnabled: Boolean = false
+
+    @Volatile
     var earThreshold: Float = DEFAULT_EAR_THRESHOLD
         set(value) {
             field = value.coerceIn(MIN_EAR_THRESHOLD, MAX_EAR_THRESHOLD)
@@ -149,6 +152,14 @@ class DmsAnalyzer(
         )
         val isYawningNow = isYawnMode && mar3D > marThreshold
         val proposedEndNs = SystemClock.elapsedRealtimeNanos()
+
+        if (!comparisonModeEnabled) {
+            updateEyeState(isEyesClosed, nowMs)
+            updateHeadState(isHeadOff, nowMs)
+            updateYawnState(isYawningNow, nowMs)
+            onResults(isDrowsyAlerting, isHeadAlerting, isYawningAlerting, result)
+            return
+        }
 
         val baseline2DStartNs = proposedEndNs
         val rawEar2D =

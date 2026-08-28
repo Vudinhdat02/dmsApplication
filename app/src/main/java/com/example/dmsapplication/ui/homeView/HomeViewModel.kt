@@ -63,6 +63,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val alertRepository = AlertRepository()
     private val _isCameraPreviewEnabled = MutableStateFlow(true)
     val isCameraPreviewEnabled = _isCameraPreviewEnabled.asStateFlow()
+    private val _isComparisonModeEnabled = MutableStateFlow(false)
+    val isComparisonModeEnabled = _isComparisonModeEnabled.asStateFlow()
     private var isHomeScreenActive = false
     private companion object {
         const val START_MONITORING_SPEED_KMH = 5f
@@ -92,6 +94,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setCameraPreviewEnabled(enabled: Boolean) {
         _isCameraPreviewEnabled.value = enabled
+    }
+
+    fun setComparisonModeEnabled(enabled: Boolean) {
+        _isComparisonModeEnabled.value = enabled
     }
     fun onDmsResult(isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean) {
         if (!isHomeScreenActive || !_isMonitoringEnabled.value) {

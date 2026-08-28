@@ -74,8 +74,10 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var seekEyeThreshold: SeekBar
     private lateinit var tvEyeThresholdValue: TextView
     private lateinit var switchGpsHome: SwitchCompat
+    private lateinit var switchComparisonMode: SwitchCompat
+    private lateinit var baselineComparisonCard: CardView
     private lateinit var baselineChart: BaselineComparisonChartView
-    private lateinit var baselineRecorder: BaselineComparisonRecorder
+    private var baselineRecorder: BaselineComparisonRecorder? = null
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
     @Volatile private var latestPnpAngles: PnPHeadPoseEstimator.HeadAngles? = null
     private var isPnpAvailable = false
@@ -91,7 +93,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             cameraExecutor = Executors.newSingleThreadExecutor()
         }
         calibrationManager = CalibrationManager(requireContext())
-        baselineRecorder = BaselineComparisonRecorder(requireContext())
         isPnpAvailable = try {
             OpenCVLoader.initLocal()
         } catch (error: Throwable) {
@@ -122,9 +123,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             )
         )
         observeViewModel()
-        if (!calibrationManager.isCalibrated ||
-            (isPnpAvailable && !calibrationManager.isPnpCalibrated)
-        ) {
+        if (!calibrationManager.isCalibrated) {
             view.post { showCalibrationDialog() }
         } else {
             viewModel.setCalibrated(true)
@@ -158,7 +157,23 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 isVectorEnabled = isChecked
                 if (!isChecked) overlayView.setResults(null)
             }
+        baselineComparisonCard = view.findViewById(R.id.baselineComparisonCard)
         baselineChart = view.findViewById(R.id.baselineComparisonChart)
+        switchComparisonMode = view.findViewById<SwitchCompat>(R.id.switchComparisonMode).apply {
+            isChecked = viewModel.isComparisonModeEnabled.value
+            setOnCheckedChangeListener { _, isChecked ->
+                viewModel.setComparisonModeEnabled(isChecked)
+                if (isChecked && !isPnpAvailable) {
+                    Toast.makeText(
+                        requireContext(),
+                        "OpenCV không khả dụng; biểu đồ PnP sẽ không có dữ liệu.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                } else if (isChecked && !calibrationManager.isPnpCalibrated) {
+                    post { showCalibrationDialog() }
+                }
+            }
+        }
         switchGpsHome = view.findViewById<SwitchCompat>(R.id.switchGpsHome).apply {
             isChecked = viewModel.isGpsEnabled.value
             setOnCheckedChangeListener { _, isChecked ->
@@ -287,6 +302,27 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isComparisonModeEnabled.collect { enabled ->
+                if (::switchComparisonMode.isInitialized &&
+                    switchComparisonMode.isChecked != enabled
+                ) {
+                    switchComparisonMode.isChecked = enabled
+                }
+                baselineComparisonCard.visibility = if (enabled) View.VISIBLE else View.GONE
+                dmsAnalyzer?.comparisonModeEnabled = enabled
+                if (enabled) {
+                    if (baselineRecorder == null) {
+                        baselineRecorder = BaselineComparisonRecorder(requireContext())
+                    }
+                } else {
+                    baselineRecorder?.close()
+                    baselineRecorder = null
+                    latestPnpAngles = null
+                    baselineChart.clear()
+                }
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isCameraPreviewEnabled.collect { isEnabled ->
                 if (isEnabled) {
                     viewFinder.visibility = View.VISIBLE
@@ -404,7 +440,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                     } else {
                         null
                     }
-                baselineRecorder.record(sample)
+                baselineRecorder?.record(sample)
                 activity?.runOnUiThread {
                     if (monitoringResourcesActive && isAdded && view != null) {
                         baselineChart.addSample(sample)
@@ -431,6 +467,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         analyzer.isSunglassesMode = viewModel.isSunglassesMode.value
         analyzer.isYawnMode = viewModel.isYawnMode.value
         analyzer.earThreshold = viewModel.earThreshold.value
+        analyzer.comparisonModeEnabled = viewModel.isComparisonModeEnabled.value
         dmsAnalyzer = analyzer
         crashDetector.startListening()
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
@@ -512,7 +549,8 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
         faceLandmarker?.close()
-        baselineRecorder.close()
+        baselineRecorder?.close()
+        baselineRecorder = null
         alarmHelper.release()
         locationHelper.stopTracking()
         crashDetector.stopListening()
