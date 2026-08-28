@@ -34,7 +34,7 @@ public sealed class DevTunnelHostedService(
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = "devtunnel",
+                FileName = ResolveExecutablePath(),
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -88,6 +88,46 @@ public sealed class DevTunnelHostedService(
         }
 
         return Task.CompletedTask;
+    }
+
+    private string ResolveExecutablePath()
+    {
+        var configuredPath = configuration["DevTunnel:ExecutablePath"];
+        if (!string.IsNullOrWhiteSpace(configuredPath))
+        {
+            var expandedPath = Environment.ExpandEnvironmentVariables(configuredPath);
+            if (File.Exists(expandedPath))
+            {
+                return expandedPath;
+            }
+
+            logger.LogWarning(
+                "Configured Dev Tunnel executable was not found at {ExecutablePath}.",
+                expandedPath);
+        }
+
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var wingetPackagesPath = Path.Combine(localAppData, "Microsoft", "WinGet", "Packages");
+
+        try
+        {
+            if (Directory.Exists(wingetPackagesPath))
+            {
+                var wingetExecutable = Directory
+                    .EnumerateFiles(wingetPackagesPath, "devtunnel.exe", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (wingetExecutable is not null)
+                {
+                    return wingetExecutable;
+                }
+            }
+        }
+        catch (Exception exception)
+        {
+            logger.LogDebug(exception, "Unable to search WinGet packages for devtunnel.exe.");
+        }
+
+        return "devtunnel";
     }
 
     private void LogOutput(string? message, bool isError)

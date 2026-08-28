@@ -63,6 +63,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val alertRepository = AlertRepository()
     private val _isCameraPreviewEnabled = MutableStateFlow(true)
     val isCameraPreviewEnabled = _isCameraPreviewEnabled.asStateFlow()
+    private var isHomeScreenActive = false
     private companion object {
         const val START_MONITORING_SPEED_KMH = 5f
         const val STOP_MONITORING_SPEED_KMH = 3f
@@ -93,7 +94,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isCameraPreviewEnabled.value = enabled
     }
     fun onDmsResult(isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean) {
-        if (!_isMonitoringEnabled.value) {
+        if (!isHomeScreenActive || !_isMonitoringEnabled.value) {
             if (_isDrowsy.value) _isDrowsy.value = false
             if (_isHeadDistracted.value) _isHeadDistracted.value = false
             if (_isYawning.value) _isYawning.value = false
@@ -123,6 +124,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun updateLocation(speed: Float, status: String) {
+        if (!isHomeScreenActive) return
         updateSpeed(speed)
         if (_isGpsEnabled.value) {
             val shouldMonitor = if (_isMonitoringEnabled.value) {
@@ -147,6 +149,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun setGpsEnabled(enabled: Boolean) {
         _isGpsEnabled.value = enabled
+        if (!isHomeScreenActive) {
+            _isMonitoringEnabled.value = false
+            _locationStatus.value = "Tr\u1EA1ng th\u00E1i: T\u1EA1m d\u1EEBng"
+            return
+        }
         if (!enabled) {
             _isMonitoringEnabled.value = true
             updateSpeed(0f)
@@ -173,6 +180,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
     fun triggerCrashAlert(latitude: Double, longitude: Double) {
+        if (!isHomeScreenActive) return
         viewModelScope.launch(Dispatchers.IO) {
             val isSuccess = alertRepository.sendCrashAlert(latitude, longitude)
             if (isSuccess) {
@@ -183,6 +191,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun setCalibrated(value: Boolean) { _isCalibrated.value = value }
+    fun setHomeScreenActive(active: Boolean) {
+        isHomeScreenActive = active
+        _isDrowsy.value = false
+        _isHeadDistracted.value = false
+        _isYawning.value = false
+        if (active) {
+            if (_isGpsEnabled.value) {
+                _isMonitoringEnabled.value = false
+                _locationStatus.value = "Tr\u1EA1ng th\u00E1i: \u0110ang ch\u1EDD GPS..."
+            } else {
+                _isMonitoringEnabled.value = true
+                _locationStatus.value = "Gi\u00E1m s\u00E1t kh\u00F4ng c\u1EA7n GPS"
+            }
+        } else {
+            _isMonitoringEnabled.value = false
+            _locationStatus.value = "Tr\u1EA1ng th\u00E1i: T\u1EA1m d\u1EEBng"
+        }
+    }
     fun resetStats() {
         _drowsyCount.value         = 0
         _headDistractedCount.value = 0

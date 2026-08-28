@@ -82,7 +82,19 @@ class AlarmHelper(private val context: Context) {
         }
     }
     fun stopAlert() {
-        alertQueue.clear()
+        try {
+            alertQueue.clear()
+            toneGenerator.stopTone()
+            listOfNotNull(warningPlayer, yawnPlayer)
+                .filter { it.isPlaying }
+                .forEach { player ->
+                    player.pause()
+                    player.seekTo(0)
+                }
+            isPlaying = false
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
     fun release() {
         try {

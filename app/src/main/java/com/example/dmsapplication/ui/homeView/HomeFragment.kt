@@ -49,6 +49,9 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private val viewModel: HomeViewModel by activityViewModels { HomeViewModelFactory(requireActivity().application) }
     private var faceLandmarker: FaceLandmarker? = null
     private var dmsAnalyzer: DmsAnalyzer? = null
+    private var cameraProvider: ProcessCameraProvider? = null
+    private var monitoringResourcesActive = false
+    private var cameraStartRequested = false
     private var cameraExecutor = Executors.newSingleThreadExecutor()
     private lateinit var alarmHelper: AlarmHelper
     private lateinit var locationHelper: LocationHelper
@@ -331,21 +334,23 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     }
     private val requestPermissionsLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
-            if (permissions[Manifest.permission.CAMERA] == true) startCamera()
+            if (permissions[Manifest.permission.CAMERA] == true && monitoringResourcesActive) {
+                startCamera()
+            }
             val locationGranted =
                 permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
                     permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true ||
                     hasLocationPermission()
             if (locationGranted) {
                 if (!viewModel.isGpsEnabled.value) viewModel.setGpsEnabled(true)
-                startLocationTrackingIfAllowed()
+                if (monitoringResourcesActive) startLocationTrackingIfAllowed()
             } else if (!locationGranted && viewModel.isGpsEnabled.value) {
                 viewModel.setGpsEnabled(false)
                 Toast.makeText(requireContext(), "Chưa có quyền vị trí để giám sát bằng GPS", Toast.LENGTH_SHORT).show()
             }
         }
     private fun startLocationTrackingIfAllowed() {
-        if (hasLocationPermission()) {
+        if (monitoringResourcesActive && hasLocationPermission()) {
             locationHelper.startTracking()
         }
     }
@@ -361,6 +366,9 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     }
     private fun startCamera() {
         val fl = faceLandmarker ?: return
+        if (!monitoringResourcesActive || !hasCameraPermission()) return
+        if (cameraStartRequested) return
+        cameraStartRequested = true
         val analyzer = DmsAnalyzer(
             faceLandmarker     = fl,
             calibrationManager = calibrationManager,
@@ -388,7 +396,12 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         crashDetector.startListening()
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
-            val cameraProvider = cameraProviderFuture.get()
+            if (!monitoringResourcesActive || !isAdded || view == null) {
+                cameraStartRequested = false
+                return@addListener
+            }
+            val provider = cameraProviderFuture.get()
+            cameraProvider = provider
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(viewFinder.surfaceProvider)
             }
@@ -398,8 +411,8 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
                 .build()
                 .also { it.setAnalyzer(cameraExecutor, analyzer) }
-            cameraProvider.unbindAll()
-            cameraProvider.bindToLifecycle(
+            provider.unbindAll()
+            provider.bindToLifecycle(
                 viewLifecycleOwner,
                 CameraSelector.DEFAULT_FRONT_CAMERA,
                 preview,
@@ -407,11 +420,54 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             )
         }, ContextCompat.getMainExecutor(requireContext()))
     }
+    private fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(
+            requireContext(),
+            Manifest.permission.CAMERA
+        ) == PackageManager.PERMISSION_GRANTED
+
+    private fun resumeMonitoring() {
+        if (monitoringResourcesActive || !isAdded || view == null) return
+        monitoringResourcesActive = true
+        viewModel.setHomeScreenActive(true)
+        if (hasCameraPermission()) startCamera()
+        if (viewModel.isGpsEnabled.value) startLocationTrackingIfAllowed()
+    }
+
+    private fun pauseMonitoring() {
+        if (!monitoringResourcesActive) return
+        monitoringResourcesActive = false
+        cameraProvider?.unbindAll()
+        cameraStartRequested = false
+        dmsAnalyzer?.resetAll()
+        overlayView.setResults(null)
+        alarmHelper.stopAlert()
+        locationHelper.stopTracking()
+        crashDetector.stopListening()
+        viewModel.setHomeScreenActive(false)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!isHidden) resumeMonitoring()
+    }
+
+    override fun onPause() {
+        pauseMonitoring()
+        super.onPause()
+    }
+
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (hidden) pauseMonitoring() else resumeMonitoring()
+    }
+
     private fun captureAndSave() {
         val bitmap = viewFinder.bitmap ?: return
         viewModel.saveViolationRecord(bitmap)
     }
     override fun onDestroyView() {
+        pauseMonitoring()
         super.onDestroyView()
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
