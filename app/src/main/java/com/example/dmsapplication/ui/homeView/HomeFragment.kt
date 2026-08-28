@@ -15,6 +15,7 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
 import androidx.camera.core.CameraSelector
@@ -29,10 +30,13 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.dmsapplication.R
+import com.example.dmsapplication.ml.analyzer.BaselineComparisonRecorder
 import com.example.dmsapplication.ml.analyzer.DmsAnalyzer
 import com.example.dmsapplication.ml.math.CalibrationManager
 import com.example.dmsapplication.ml.math.HeadPoseEstimator
+import com.example.dmsapplication.ml.math.PnPHeadPoseEstimator
 import com.example.dmsapplication.ui.homeView.helper.AlarmHelper
+import com.example.dmsapplication.ui.homeView.helper.BaselineComparisonChartView
 import com.example.dmsapplication.ui.homeView.helper.CalibrationDialog
 import com.example.dmsapplication.ui.homeView.helper.LocationHelper
 import com.example.dmsapplication.ui.homeView.helper.OverlayView
@@ -41,6 +45,7 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import kotlinx.coroutines.launch
+import org.opencv.android.OpenCVLoader
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -69,7 +74,11 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var seekEyeThreshold: SeekBar
     private lateinit var tvEyeThresholdValue: TextView
     private lateinit var switchGpsHome: SwitchCompat
+    private lateinit var baselineChart: BaselineComparisonChartView
+    private lateinit var baselineRecorder: BaselineComparisonRecorder
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
+    @Volatile private var latestPnpAngles: PnPHeadPoseEstimator.HeadAngles? = null
+    private var isPnpAvailable = false
     private var isVectorEnabled = false
     private val handler = Handler(Looper.getMainLooper())
     override fun onCreateView(
@@ -82,6 +91,13 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             cameraExecutor = Executors.newSingleThreadExecutor()
         }
         calibrationManager = CalibrationManager(requireContext())
+        baselineRecorder = BaselineComparisonRecorder(requireContext())
+        isPnpAvailable = try {
+            OpenCVLoader.initLocal()
+        } catch (error: Throwable) {
+            Log.w("HomeFragment", "OpenCV could not be initialized; PnP baseline is disabled.", error)
+            false
+        }
         initViews(view)
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             v.setPadding(0, 0, 0, 0)
@@ -106,7 +122,9 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             )
         )
         observeViewModel()
-        if (!calibrationManager.isCalibrated) {
+        if (!calibrationManager.isCalibrated ||
+            (isPnpAvailable && !calibrationManager.isPnpCalibrated)
+        ) {
             view.post { showCalibrationDialog() }
         } else {
             viewModel.setCalibrated(true)
@@ -140,6 +158,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 isVectorEnabled = isChecked
                 if (!isChecked) overlayView.setResults(null)
             }
+        baselineChart = view.findViewById(R.id.baselineComparisonChart)
         switchGpsHome = view.findViewById<SwitchCompat>(R.id.switchGpsHome).apply {
             isChecked = viewModel.isGpsEnabled.value
             setOnCheckedChangeListener { _, isChecked ->
@@ -305,6 +324,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         val angles = latestHeadAngles
         if (angles != null) {
             calibrationManager.saveBaseline(angles)
+            latestPnpAngles?.let(calibrationManager::savePnpBaseline)
             viewModel.setCalibrated(true)
             viewModel.resetStats()
             dmsAnalyzer?.resetAll()
@@ -370,12 +390,31 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         if (cameraStartRequested) return
         cameraStartRequested = true
         val analyzer = DmsAnalyzer(
-            faceLandmarker     = fl,
+            faceLandmarker = fl,
             calibrationManager = calibrationManager,
-            onResults = { isDrowsy, isHeadDistracted, isYawning, result ->
-                result?.faceLandmarks()?.firstOrNull()?.let { lm ->
-                    latestHeadAngles = HeadPoseEstimator.estimate(lm)
+            pnpEnabled = isPnpAvailable,
+            onComparisonSample = { sample ->
+                latestPnpAngles =
+                    if (sample.pnpYawDegrees != null && sample.pnpPitchDegrees != null) {
+                        PnPHeadPoseEstimator.HeadAngles(
+                            yawDegrees = sample.pnpYawDegrees,
+                            pitchDegrees = sample.pnpPitchDegrees,
+                            rollDegrees = 0f
+                        )
+                    } else {
+                        null
+                    }
+                baselineRecorder.record(sample)
+                activity?.runOnUiThread {
+                    if (monitoringResourcesActive && isAdded && view != null) {
+                        baselineChart.addSample(sample)
+                    }
                 }
+            },
+            onResults = { isDrowsy, isHeadDistracted, isYawning, result ->
+                val landmarks = result?.faceLandmarks()?.firstOrNull()
+                latestHeadAngles = landmarks?.let(HeadPoseEstimator::estimate)
+                if (landmarks == null) latestPnpAngles = null
                 activity?.runOnUiThread {
                     val wasAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
                     viewModel.onDmsResult(isDrowsy, isHeadDistracted, isYawning)
@@ -441,6 +480,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         cameraStartRequested = false
         dmsAnalyzer?.resetAll()
         overlayView.setResults(null)
+        baselineChart.clear()
         alarmHelper.stopAlert()
         locationHelper.stopTracking()
         crashDetector.stopListening()
@@ -472,6 +512,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
         faceLandmarker?.close()
+        baselineRecorder.close()
         alarmHelper.release()
         locationHelper.stopTracking()
         crashDetector.stopListening()

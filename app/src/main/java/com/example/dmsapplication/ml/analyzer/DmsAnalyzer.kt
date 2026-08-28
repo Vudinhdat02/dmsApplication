@@ -10,175 +10,287 @@ import com.example.dmsapplication.ml.math.CalibrationManager
 import com.example.dmsapplication.ml.math.EarCalculator
 import com.example.dmsapplication.ml.math.HeadPoseEstimator
 import com.example.dmsapplication.ml.math.MarCalculator
+import com.example.dmsapplication.ml.math.PnPHeadPoseEstimator
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarkerResult
 import kotlin.math.abs
+
 class DmsAnalyzer(
     private val faceLandmarker: FaceLandmarker,
     private val calibrationManager: CalibrationManager,
-    private val onResults: (isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean, result: FaceLandmarkerResult?) -> Unit
+    private val pnpEnabled: Boolean,
+    private val onComparisonSample: (BaselineComparisonSample) -> Unit,
+    private val onResults: (
+        isDrowsy: Boolean,
+        isHeadDistracted: Boolean,
+        isYawning: Boolean,
+        result: FaceLandmarkerResult?
+    ) -> Unit
 ) : ImageAnalysis.Analyzer {
     companion object {
         const val DEFAULT_EAR_THRESHOLD = 0.16f
         const val MIN_EAR_THRESHOLD = 0.10f
         const val MAX_EAR_THRESHOLD = 0.30f
+        const val DEFAULT_2D_EAR_THRESHOLD = 0.20f
+        const val DEFAULT_2D_MAR_THRESHOLD = 0.38f
     }
+
     var isSunglassesMode: Boolean = false
     var isYawnMode: Boolean = true
+
     @Volatile
-    var earThreshold: Float = DEFAULT_EAR_THRESHOLD     // Ngưỡng nhắm mắt
+    var earThreshold: Float = DEFAULT_EAR_THRESHOLD
         set(value) {
             field = value.coerceIn(MIN_EAR_THRESHOLD, MAX_EAR_THRESHOLD)
         }
-    private val SMOOTH_WINDOW = 3
-    private val MOUTH_WIDTH_THRESHOLD = 0.5f
-    private val EYE_CLOSED_DURATION   = 800L
-    private val HEAD_DISTRACTED_DURATION = 1000L     //ngưỡng quay đầu
-    private val FACE_LOST_ALERT_DURATION = 800L     //Nếu mất mặt NGẮN hơn mốc này → cảnh báo.
-    private val FACE_LOST_SILENCE_DURATION = 5000L    //Nếu mất mặt DÀI hơn mốc này  → tắt cảnh báo.
-    private val MAR_THRESHOLD = 0.38f    // Ngưỡng ngáp ngủ
-    private val YAWN_DURATION = 800L
-    private val YAWN_COOLDOWN = 3000L
-    private val LEFT_EYE_INDICES = listOf(362, 385, 387, 263, 373, 380)
-    private val RIGHT_EYE_INDICES = listOf(33,  160, 158, 133, 153, 144)
-    private val MOUTH_LEFT = 61
-    private val MOUTH_RIGHT = 291
-    private val INNER_LIP_TOP = 13
-    private val INNER_LIP_BOTTOM = 14
-    private val INNER_MOUTH_LEFT = 78
-    private val INNER_MOUTH_RIGHT= 308
-    private val earHistory = ArrayDeque<Float>(SMOOTH_WINDOW)    // State — mắt & ngáp
+
+    private val smoothWindow = 3
+    private val mouthWidthThreshold = 0.5f
+    private val eyeClosedDurationMs = 800L
+    private val headDistractedDurationMs = 1000L
+    private val faceLostAlertDurationMs = 800L
+    private val faceLostSilenceDurationMs = 5000L
+    private val marThreshold = 0.38f
+    private val yawnDurationMs = 800L
+    private val yawnCooldownMs = 3000L
+
+    private val leftEyeIndices = listOf(362, 385, 387, 263, 373, 380)
+    private val rightEyeIndices = listOf(33, 160, 158, 133, 153, 144)
+    private val mouthLeft = 61
+    private val mouthRight = 291
+    private val innerLipTop = 13
+    private val innerLipBottom = 14
+    private val innerMouthLeft = 78
+    private val innerMouthRight = 308
+
+    private val ear3DHistory = ArrayDeque<Float>(smoothWindow)
+    private val ear2DHistory = ArrayDeque<Float>(smoothWindow)
     private var eyesClosedStartTime = 0L
     private var isDrowsyAlerting = false
     private var yawnStartTime = 0L
     private var lastYawnTime = 0L
     private var isYawningAlerting = false
-    private var headDistractedStartTime = 0L    // State quay đầu (có mặt)
+    private var headDistractedStartTime = 0L
     private var isHeadAlerting = false
-    private var faceLostStartTime = 0L   // Thời điểm bắt đầu mất mặt
+    private var faceLostStartTime = 0L
     private val benchmarkRecorder = DmsBenchmarkRecorder()
+
     override fun analyze(imageProxy: ImageProxy) {
         val totalStartNs = SystemClock.elapsedRealtimeNanos()
         val preprocessingStartNs = totalStartNs
-        val bitmap  = imageProxy.toBitmap()
-        val mpImage = BitmapImageBuilder(bitmap).build()
-        val preprocessingEndNs = SystemClock.elapsedRealtimeNanos()
-        val nowMs   = System.currentTimeMillis()
-        val inferenceStartNs = preprocessingEndNs        //AI Facelandmarker xử lý ảnh
-        val result = faceLandmarker.detectForVideo(mpImage, nowMs)
-        val inferenceEndNs = SystemClock.elapsedRealtimeNanos()
-        val postprocessingStartNs = inferenceEndNs
-        val faceDetected = result.faceLandmarks().isNotEmpty()
-        if (faceDetected) {
-            faceLostStartTime = 0L   // Khuôn mặt được phát hiện → reset bộ đếm mất mặt
-            val landmarks = result.faceLandmarks()[0]
+        var faceDetected = false
 
-            // 1. EAR — nhắm mắt
-            val leftPts  = LEFT_EYE_INDICES.map  { landmarks[it] }
-            val rightPts = RIGHT_EYE_INDICES.map { landmarks[it] }
-            val rawEar   = (EarCalculator.calculateEAR(leftPts) + EarCalculator.calculateEAR(rightPts)) / 2f
-            if (earHistory.size >= SMOOTH_WINDOW) earHistory.removeFirst()
-            earHistory.addLast(rawEar)
-            val smoothedEar = earHistory.average().toFloat()
-            val mouthWidth = abs(landmarks[MOUTH_RIGHT].x() - landmarks[MOUTH_LEFT].x())
-            val isEyesClosed = if (isSunglassesMode) false
-            else smoothedEar < earThreshold && mouthWidth < MOUTH_WIDTH_THRESHOLD
+        try {
+            val imageWidth = imageProxy.width
+            val imageHeight = imageProxy.height
+            val bitmap = imageProxy.toBitmap()
+            val mpImage = BitmapImageBuilder(bitmap).build()
+            val preprocessingEndNs = SystemClock.elapsedRealtimeNanos()
+            val nowMs = System.currentTimeMillis()
 
-            // 2. Góc đầu
-            val headAngles = HeadPoseEstimator.estimate(landmarks)
-            val isHeadOff  = if (headAngles != null && calibrationManager.isCalibrated)
-                calibrationManager.isHeadDistracted(headAngles)
-            else false
+            val inferenceStartNs = preprocessingEndNs
+            val result = faceLandmarker.detectForVideo(mpImage, nowMs)
+            val inferenceEndNs = SystemClock.elapsedRealtimeNanos()
+            val postprocessingStartNs = inferenceEndNs
+            faceDetected = result.faceLandmarks().isNotEmpty()
 
-            // 3. MAR — ngáp
-            val isYawningNow = if (isYawnMode) {
-                val mar = MarCalculator.calculateMAR(
-                    landmarks[INNER_LIP_TOP],
-                    landmarks[INNER_LIP_BOTTOM],
-                    landmarks[INNER_MOUTH_LEFT],
-                    landmarks[INNER_MOUTH_RIGHT]
-                )
-                mar > MAR_THRESHOLD
-            } else false
-
-            // State machine nhắm mắt
-            if (isEyesClosed) {
-                if (eyesClosedStartTime == 0L) eyesClosedStartTime = nowMs
-                if (nowMs - eyesClosedStartTime >= EYE_CLOSED_DURATION) isDrowsyAlerting = true
+            if (faceDetected) {
+                processDetectedFace(result, nowMs, imageWidth, imageHeight)
             } else {
-                eyesClosedStartTime = 0L
-                isDrowsyAlerting    = false
+                processMissingFace(nowMs)
             }
 
-            // State machine quay đầu (có mặt)
-            if (isHeadOff) {
-                if (headDistractedStartTime == 0L) headDistractedStartTime = nowMs
-                if (nowMs - headDistractedStartTime >= HEAD_DISTRACTED_DURATION) isHeadAlerting = true
-            } else {
-                headDistractedStartTime = 0L
-                isHeadAlerting          = false
-            }
+            val postprocessingEndNs = SystemClock.elapsedRealtimeNanos()
+            benchmarkRecorder.record(
+                preprocessingLatencyMs = (preprocessingEndNs - preprocessingStartNs) / 1_000_000.0,
+                inferenceLatencyMs = (inferenceEndNs - inferenceStartNs) / 1_000_000.0,
+                postprocessingLatencyMs = (postprocessingEndNs - postprocessingStartNs) / 1_000_000.0,
+                totalLatencyMs = (postprocessingEndNs - totalStartNs) / 1_000_000.0,
+                faceDetected = faceDetected
+            )
+        } finally {
+            imageProxy.close()
+        }
+    }
 
-            // State machine ngáp
-            if (isYawningNow) {
-                if (yawnStartTime == 0L) yawnStartTime = nowMs
-                if (nowMs - yawnStartTime >= YAWN_DURATION && nowMs - lastYawnTime > YAWN_COOLDOWN) {
-                    isYawningAlerting = true
-                    lastYawnTime = nowMs
-                } else {
-                    isYawningAlerting = false
-                }
+    private fun processDetectedFace(
+        result: FaceLandmarkerResult,
+        nowMs: Long,
+        imageWidth: Int,
+        imageHeight: Int
+    ) {
+        faceLostStartTime = 0L
+        val landmarks = result.faceLandmarks()[0]
+        val leftEye = leftEyeIndices.map { landmarks[it] }
+        val rightEye = rightEyeIndices.map { landmarks[it] }
+
+        val proposedStartNs = SystemClock.elapsedRealtimeNanos()
+        val rawEar3D =
+            (EarCalculator.calculateEAR(leftEye) + EarCalculator.calculateEAR(rightEye)) / 2f
+        val smoothedEar3D = smooth(ear3DHistory, rawEar3D)
+        val mouthWidth = abs(landmarks[mouthRight].x() - landmarks[mouthLeft].x())
+        val isEyesClosed =
+            !isSunglassesMode &&
+                smoothedEar3D < earThreshold &&
+                mouthWidth < mouthWidthThreshold
+
+        val relativeHeadAngles = HeadPoseEstimator.estimate(landmarks)
+        val isHeadOff =
+            relativeHeadAngles != null &&
+                calibrationManager.isCalibrated &&
+                calibrationManager.isHeadDistracted(relativeHeadAngles)
+
+        val mar3D = MarCalculator.calculateMAR(
+            landmarks[innerLipTop],
+            landmarks[innerLipBottom],
+            landmarks[innerMouthLeft],
+            landmarks[innerMouthRight]
+        )
+        val isYawningNow = isYawnMode && mar3D > marThreshold
+        val proposedEndNs = SystemClock.elapsedRealtimeNanos()
+
+        val baseline2DStartNs = proposedEndNs
+        val rawEar2D =
+            (EarCalculator.calculateEAR2D(leftEye) + EarCalculator.calculateEAR2D(rightEye)) / 2f
+        val smoothedEar2D = smooth(ear2DHistory, rawEar2D)
+        val mar2D = MarCalculator.calculateMAR2D(
+            landmarks[innerLipTop],
+            landmarks[innerLipBottom],
+            landmarks[innerMouthLeft],
+            landmarks[innerMouthRight]
+        )
+        val baseline2DEndNs = SystemClock.elapsedRealtimeNanos()
+
+        val pnpStartNs = baseline2DEndNs
+        val pnpAngles =
+            if (pnpEnabled) PnPHeadPoseEstimator.estimate(landmarks, imageWidth, imageHeight)
+            else null
+        val pnpEndNs = SystemClock.elapsedRealtimeNanos()
+
+        updateEyeState(isEyesClosed, nowMs)
+        updateHeadState(isHeadOff, nowMs)
+        updateYawnState(isYawningNow, nowMs)
+
+        val relativeHeadScore = calibrationManager.relativeHeadScore(relativeHeadAngles)
+        val proposedScore = BaselineScoreCalculator.proposedScore(
+            ear3D = smoothedEar3D,
+            earThreshold = earThreshold,
+            mar3D = mar3D,
+            marThreshold = marThreshold,
+            relativeHeadScore = relativeHeadScore
+        )
+        val earMar2DScore = BaselineScoreCalculator.earMar2DScore(
+            ear2D = smoothedEar2D,
+            earThreshold = DEFAULT_2D_EAR_THRESHOLD,
+            mar2D = mar2D,
+            marThreshold = DEFAULT_2D_MAR_THRESHOLD
+        )
+        val pnpScore = calibrationManager.pnpHeadScore(pnpAngles)
+
+        onComparisonSample(
+            BaselineComparisonSample(
+                timestampMs = nowMs,
+                ear3D = smoothedEar3D,
+                ear2D = smoothedEar2D,
+                mar3D = mar3D,
+                mar2D = mar2D,
+                relativeYaw = relativeHeadAngles?.yaw,
+                relativePitch = relativeHeadAngles?.pitch,
+                pnpYawDegrees = pnpAngles?.yawDegrees,
+                pnpPitchDegrees = pnpAngles?.pitchDegrees,
+                proposedScore = proposedScore,
+                earMar2DScore = earMar2DScore,
+                pnpScore = pnpScore,
+                proposedLatencyMs = (proposedEndNs - proposedStartNs) / 1_000_000.0,
+                earMar2DLatencyMs = (baseline2DEndNs - baseline2DStartNs) / 1_000_000.0,
+                pnpLatencyMs =
+                    if (pnpEnabled) (pnpEndNs - pnpStartNs) / 1_000_000.0 else null
+            )
+        )
+        onResults(isDrowsyAlerting, isHeadAlerting, isYawningAlerting, result)
+    }
+
+    private fun processMissingFace(nowMs: Long) {
+        resetEyeAndYawnState()
+        if (calibrationManager.isCalibrated) {
+            if (faceLostStartTime == 0L) faceLostStartTime = nowMs
+            val faceLostMs = nowMs - faceLostStartTime
+            isHeadAlerting = when {
+                faceLostMs < faceLostAlertDurationMs -> false
+                faceLostMs < faceLostSilenceDurationMs -> true
+                else -> false
+            }
+            headDistractedStartTime = 0L
+            onResults(false, isHeadAlerting, false, null)
+        } else {
+            resetAll()
+            onResults(false, false, false, null)
+        }
+    }
+
+    private fun updateEyeState(isEyesClosed: Boolean, nowMs: Long) {
+        if (isEyesClosed) {
+            if (eyesClosedStartTime == 0L) eyesClosedStartTime = nowMs
+            if (nowMs - eyesClosedStartTime >= eyeClosedDurationMs) isDrowsyAlerting = true
+        } else {
+            eyesClosedStartTime = 0L
+            isDrowsyAlerting = false
+        }
+    }
+
+    private fun updateHeadState(isHeadOff: Boolean, nowMs: Long) {
+        if (isHeadOff) {
+            if (headDistractedStartTime == 0L) headDistractedStartTime = nowMs
+            if (nowMs - headDistractedStartTime >= headDistractedDurationMs) {
+                isHeadAlerting = true
+            }
+        } else {
+            headDistractedStartTime = 0L
+            isHeadAlerting = false
+        }
+    }
+
+    private fun updateYawnState(isYawningNow: Boolean, nowMs: Long) {
+        if (isYawningNow) {
+            if (yawnStartTime == 0L) yawnStartTime = nowMs
+            if (nowMs - yawnStartTime >= yawnDurationMs && nowMs - lastYawnTime > yawnCooldownMs) {
+                isYawningAlerting = true
+                lastYawnTime = nowMs
             } else {
-                yawnStartTime     = 0L
                 isYawningAlerting = false
             }
-
-            onResults(isDrowsyAlerting, isHeadAlerting, isYawningAlerting, result)
-
         } else {
-            resetEyeAndYawnState()
-            // Chỉ áp dụng logic "mất mặt = quay đầu" khi đã calibrate
-            if (calibrationManager.isCalibrated) {
-                if (faceLostStartTime == 0L) faceLostStartTime = nowMs
-                val faceLostMs = nowMs - faceLostStartTime
-                isHeadAlerting = when {
-                    faceLostMs < FACE_LOST_ALERT_DURATION   -> false
-                    faceLostMs < FACE_LOST_SILENCE_DURATION -> true
-                    else                                    -> false
-                }
-                headDistractedStartTime = 0L
-                onResults(false, isHeadAlerting, false, null)
-            } else {
-                resetAll()
-                onResults(false, false, false, null)
-            }
+            yawnStartTime = 0L
+            isYawningAlerting = false
         }
-        val postprocessingEndNs = SystemClock.elapsedRealtimeNanos()
-        benchmarkRecorder.record(
-            preprocessingLatencyMs = (preprocessingEndNs - preprocessingStartNs) / 1_000_000.0,
-            inferenceLatencyMs = (inferenceEndNs - inferenceStartNs) / 1_000_000.0,
-            postprocessingLatencyMs = (postprocessingEndNs - postprocessingStartNs) / 1_000_000.0,
-            totalLatencyMs = (postprocessingEndNs - totalStartNs) / 1_000_000.0,
-            faceDetected = faceDetected,
-        )
-        imageProxy.close()
     }
+
+    private fun smooth(history: ArrayDeque<Float>, value: Float): Float {
+        if (history.size >= smoothWindow) history.removeFirst()
+        history.addLast(value)
+        return history.average().toFloat()
+    }
+
+
     private fun resetEyeAndYawnState() {
-        earHistory.clear()
+        ear3DHistory.clear()
+        ear2DHistory.clear()
         eyesClosedStartTime = 0L
-        isDrowsyAlerting    = false
-        yawnStartTime       = 0L
-        isYawningAlerting   = false
+        isDrowsyAlerting = false
+        yawnStartTime = 0L
+        isYawningAlerting = false
     }
+
     fun resetAll() {
-        eyesClosedStartTime     = 0L
+        eyesClosedStartTime = 0L
         headDistractedStartTime = 0L
-        yawnStartTime           = 0L
-        faceLostStartTime       = 0L
-        isDrowsyAlerting        = false
-        isHeadAlerting          = false
-        isYawningAlerting       = false
-        earHistory.clear()
+        yawnStartTime = 0L
+        faceLostStartTime = 0L
+        isDrowsyAlerting = false
+        isHeadAlerting = false
+        isYawningAlerting = false
+        ear3DHistory.clear()
+        ear2DHistory.clear()
     }
 }

@@ -10,6 +10,12 @@ import kotlin.math.sqrt
  * Sử dụng khoảng cách 3D (X, Y, Z) để giữ độ chuẩn xác khi mặt hơi quay/nghiêng.
  */
 object EarCalculator {
+    private fun distance2D(p1: NormalizedLandmark, p2: NormalizedLandmark): Float {
+        val dx = p1.x() - p2.x()
+        val dy = p1.y() - p2.y()
+        return sqrt(dx * dx + dy * dy)
+    }
+
     private fun distance3D(p1: NormalizedLandmark, p2: NormalizedLandmark): Float {
         val dx = p1.x() - p2.x()
         val dy = p1.y() - p2.y()
@@ -22,6 +28,15 @@ object EarCalculator {
         val b = distance3D(landmarks[2], landmarks[4])
         // c là đường chiều ngang (chiều dài mắt)
         val c = distance3D(landmarks[0], landmarks[3])
+        if (c == 0f) return 0f
+        return (a + b) / (2.0f * c)
+    }
+
+    /** Classical 2D EAR baseline. Depth is deliberately ignored. */
+    fun calculateEAR2D(landmarks: List<NormalizedLandmark>): Float {
+        val a = distance2D(landmarks[1], landmarks[5])
+        val b = distance2D(landmarks[2], landmarks[4])
+        val c = distance2D(landmarks[0], landmarks[3])
         if (c == 0f) return 0f
         return (a + b) / (2.0f * c)
     }

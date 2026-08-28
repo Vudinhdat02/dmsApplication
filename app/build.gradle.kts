@@ -140,6 +140,7 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:${camerax_version}")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
+    implementation("org.opencv:opencv:4.12.0")
 
     // ROOM DATABASE
     kapt("androidx.room:room-compiler:2.7.2")
@@ -171,4 +172,6 @@ dependencies {
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    testImplementation(libs.junit)
 }
