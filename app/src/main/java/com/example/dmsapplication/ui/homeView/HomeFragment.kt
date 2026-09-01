@@ -15,7 +15,6 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import android.util.Log
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.widget.SwitchCompat
 import androidx.camera.core.CameraSelector
@@ -30,23 +29,18 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.lifecycleScope
 import com.example.dmsapplication.R
-import com.example.dmsapplication.ml.analyzer.BaselineComparisonRecorder
 import com.example.dmsapplication.ml.analyzer.DmsAnalyzer
 import com.example.dmsapplication.ml.math.CalibrationManager
 import com.example.dmsapplication.ml.math.HeadPoseEstimator
-import com.example.dmsapplication.ml.math.PnPHeadPoseEstimator
 import com.example.dmsapplication.ui.homeView.helper.AlarmHelper
-import com.example.dmsapplication.ui.homeView.helper.BaselineComparisonChartView
 import com.example.dmsapplication.ui.homeView.helper.CalibrationDialog
 import com.example.dmsapplication.ui.homeView.helper.LocationHelper
 import com.example.dmsapplication.ui.homeView.helper.OverlayView
 import com.example.dmsapplication.utils.CrashDetector
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
-import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.mediapipe.tasks.vision.facelandmarker.FaceLandmarker
 import kotlinx.coroutines.launch
-import org.opencv.android.OpenCVLoader
 import java.util.Locale
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
@@ -75,16 +69,7 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
     private lateinit var seekEyeThreshold: SeekBar
     private lateinit var tvEyeThresholdValue: TextView
     private lateinit var switchGpsHome: SwitchCompat
-    private lateinit var switchComparisonMode: SwitchCompat
-    private lateinit var baselineComparisonCard: CardView
-    private lateinit var baselineChart: BaselineComparisonChartView
-    private lateinit var comparisonModeGroup: MaterialButtonToggleGroup
-    private lateinit var tvComparisonPrimaryLegend: TextView
-    private lateinit var tvComparisonBaselineLegend: TextView
-    private var baselineRecorder: BaselineComparisonRecorder? = null
     @Volatile private var latestHeadAngles: HeadPoseEstimator.HeadAngles? = null
-    @Volatile private var latestPnpAngles: PnPHeadPoseEstimator.HeadAngles? = null
-    private var isPnpAvailable = false
     private var isVectorEnabled = false
     private val handler = Handler(Looper.getMainLooper())
     override fun onCreateView(
@@ -97,12 +82,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             cameraExecutor = Executors.newSingleThreadExecutor()
         }
         calibrationManager = CalibrationManager(requireContext())
-        isPnpAvailable = try {
-            OpenCVLoader.initLocal()
-        } catch (error: Throwable) {
-            Log.w("HomeFragment", "OpenCV could not be initialized; PnP baseline is disabled.", error)
-            false
-        }
         initViews(view)
         ViewCompat.setOnApplyWindowInsetsListener(view) { v, insets ->
             v.setPadding(0, 0, 0, 0)
@@ -161,37 +140,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 isVectorEnabled = isChecked
                 if (!isChecked) overlayView.setResults(null)
             }
-        baselineComparisonCard = view.findViewById(R.id.baselineComparisonCard)
-        baselineChart = view.findViewById(R.id.baselineComparisonChart)
-        comparisonModeGroup = view.findViewById(R.id.comparisonModeGroup)
-        tvComparisonPrimaryLegend = view.findViewById(R.id.tvComparisonPrimaryLegend)
-        tvComparisonBaselineLegend = view.findViewById(R.id.tvComparisonBaselineLegend)
-        comparisonModeGroup.addOnButtonCheckedListener { _, checkedId, isChecked ->
-            if (!isChecked) return@addOnButtonCheckedListener
-            val mode = when (checkedId) {
-                R.id.btnComparisonMouth -> BaselineComparisonChartView.Mode.MOUTH
-                R.id.btnComparisonHead -> BaselineComparisonChartView.Mode.HEAD
-                else -> BaselineComparisonChartView.Mode.EYE
-            }
-            updateComparisonChartMode(mode)
-        }
-        comparisonModeGroup.check(R.id.btnComparisonEye)
-        updateComparisonChartMode(BaselineComparisonChartView.Mode.EYE)
-        switchComparisonMode = view.findViewById<SwitchCompat>(R.id.switchComparisonMode).apply {
-            isChecked = viewModel.isComparisonModeEnabled.value
-            setOnCheckedChangeListener { _, isChecked ->
-                viewModel.setComparisonModeEnabled(isChecked)
-                if (isChecked && !isPnpAvailable) {
-                    Toast.makeText(
-                        requireContext(),
-                        "OpenCV không khả dụng; biểu đồ PnP sẽ không có dữ liệu.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                } else if (isChecked && !calibrationManager.isPnpCalibrated) {
-                    post { showCalibrationDialog() }
-                }
-            }
-        }
         switchGpsHome = view.findViewById<SwitchCompat>(R.id.switchGpsHome).apply {
             isChecked = viewModel.isGpsEnabled.value
             setOnCheckedChangeListener { _, isChecked ->
@@ -236,12 +184,25 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
                 }
             }
     }
+
     private fun observeViewModel() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isDrowsy.collect { updateBorderAndAlarm() }
         }
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isHeadDistracted.collect { updateBorderAndAlarm() }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.isFaceNotVisible.collect { isFaceNotVisible ->
+                updateBorderAndAlarm()
+                if (isFaceNotVisible) {
+                    Toast.makeText(
+                        requireContext(),
+                        "Không quan sát được tài xế. Hãy kiểm tra camera!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
         }
         viewLifecycleOwner.lifecycleScope.launch {
             viewModel.drowsyCount.collect { count ->
@@ -291,10 +252,8 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isMonitoringEnabled.collect { monitoring ->
-                if (!monitoring && !viewModel.isDrowsy.value && !viewModel.isHeadDistracted.value) {
-                    cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), if (monitoring) R.color.success else R.color.text_muted))
-                }
+            viewModel.isMonitoringEnabled.collect {
+                updateBorderAndAlarm()
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
@@ -320,27 +279,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         }
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.isComparisonModeEnabled.collect { enabled ->
-                if (::switchComparisonMode.isInitialized &&
-                    switchComparisonMode.isChecked != enabled
-                ) {
-                    switchComparisonMode.isChecked = enabled
-                }
-                baselineComparisonCard.visibility = if (enabled) View.VISIBLE else View.GONE
-                dmsAnalyzer?.comparisonModeEnabled = enabled
-                if (enabled) {
-                    if (baselineRecorder == null) {
-                        baselineRecorder = BaselineComparisonRecorder(requireContext())
-                    }
-                } else {
-                    baselineRecorder?.close()
-                    baselineRecorder = null
-                    latestPnpAngles = null
-                    baselineChart.clear()
-                }
-            }
-        }
-        viewLifecycleOwner.lifecycleScope.launch {
             viewModel.isCameraPreviewEnabled.collect { isEnabled ->
                 if (isEnabled) {
                     viewFinder.visibility = View.VISIBLE
@@ -354,37 +292,24 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
             }
         }
     }
-    private fun updateComparisonChartMode(mode: BaselineComparisonChartView.Mode) {
-        baselineChart.setMode(mode)
-        when (mode) {
-            BaselineComparisonChartView.Mode.EYE -> {
-                tvComparisonPrimaryLegend.text = "● EAR 3D"
-                tvComparisonBaselineLegend.text = "● EAR 2D"
-                tvComparisonBaselineLegend.setTextColor(
-                    ContextCompat.getColor(requireContext(), R.color.warning)
-                )
-            }
-            BaselineComparisonChartView.Mode.MOUTH -> {
-                tvComparisonPrimaryLegend.text = "● MAR 3D"
-                tvComparisonBaselineLegend.text = "● MAR 2D"
-                tvComparisonBaselineLegend.setTextColor(
-                    ContextCompat.getColor(requireContext(), R.color.warning)
-                )
-            }
-            BaselineComparisonChartView.Mode.HEAD -> {
-                tvComparisonPrimaryLegend.text = "● Z-depth"
-                tvComparisonBaselineLegend.text = "● PnP"
-                tvComparisonBaselineLegend.setTextColor(
-                    ContextCompat.getColor(requireContext(), R.color.accent_purple)
-                )
-            }
-        }
-    }
-
     private fun updateBorderAndAlarm() {
-        val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+        if (!viewModel.isMonitoringEnabled.value) {
+            cameraBorder.setCardBackgroundColor(
+                ContextCompat.getColor(requireContext(), R.color.text_muted)
+            )
+            alarmHelper.stopAlert()
+            return
+        }
+        val isAlert =
+            viewModel.isDrowsy.value ||
+                viewModel.isHeadDistracted.value ||
+                viewModel.isFaceNotVisible.value
         cameraBorder.setCardBackgroundColor(ContextCompat.getColor(requireContext(), if (isAlert) R.color.danger else R.color.success))
-        if (isAlert) alarmHelper.playAlert() else alarmHelper.stopAlert()
+        if (isAlert) {
+            alarmHelper.playAlert()
+        } else {
+            alarmHelper.stopAlert()
+        }
     }
     private fun thresholdToProgress(threshold: Float): Int {
         return ((threshold - DmsAnalyzer.MIN_EAR_THRESHOLD) * 100).roundToInt()
@@ -405,7 +330,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         val angles = latestHeadAngles
         if (angles != null) {
             calibrationManager.saveBaseline(angles)
-            latestPnpAngles?.let(calibrationManager::savePnpBaseline)
             viewModel.setCalibrated(true)
             viewModel.resetStats()
             dmsAnalyzer?.resetAll()
@@ -473,34 +397,21 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         val analyzer = DmsAnalyzer(
             faceLandmarker = fl,
             calibrationManager = calibrationManager,
-            pnpEnabled = isPnpAvailable,
-            onComparisonSample = { sample ->
-                latestPnpAngles =
-                    if (sample.pnpYawDegrees != null && sample.pnpPitchDegrees != null) {
-                        PnPHeadPoseEstimator.HeadAngles(
-                            yawDegrees = sample.pnpYawDegrees,
-                            pitchDegrees = sample.pnpPitchDegrees,
-                            rollDegrees = 0f
-                        )
-                    } else {
-                        null
-                    }
-                baselineRecorder?.record(sample)
-                activity?.runOnUiThread {
-                    if (monitoringResourcesActive && isAdded && view != null) {
-                        baselineChart.addSample(sample)
-                    }
-                }
-            },
-            onResults = { isDrowsy, isHeadDistracted, isYawning, result ->
+            onResults = { isDrowsy, isHeadDistracted, isFaceNotVisible, isYawning, result ->
                 val landmarks = result?.faceLandmarks()?.firstOrNull()
                 latestHeadAngles = landmarks?.let(HeadPoseEstimator::estimate)
-                if (landmarks == null) latestPnpAngles = null
                 activity?.runOnUiThread {
-                    val wasAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
-                    viewModel.onDmsResult(isDrowsy, isHeadDistracted, isYawning)
-                    val isAlert = viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
-                    if (!wasAlert && isAlert) {
+                    val wasRecordableAlert =
+                        viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+                    viewModel.onDmsResult(
+                        isDrowsy,
+                        isHeadDistracted,
+                        isFaceNotVisible,
+                        isYawning
+                    )
+                    val isRecordableAlert =
+                        viewModel.isDrowsy.value || viewModel.isHeadDistracted.value
+                    if (!wasRecordableAlert && isRecordableAlert) {
                         captureAndSave()
                     }
                     if (isVectorEnabled) {
@@ -512,7 +423,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         analyzer.isSunglassesMode = viewModel.isSunglassesMode.value
         analyzer.isYawnMode = viewModel.isYawnMode.value
         analyzer.earThreshold = viewModel.earThreshold.value
-        analyzer.comparisonModeEnabled = viewModel.isComparisonModeEnabled.value
         dmsAnalyzer = analyzer
         crashDetector.startListening()
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
@@ -562,7 +472,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         cameraStartRequested = false
         dmsAnalyzer?.resetAll()
         overlayView.setResults(null)
-        baselineChart.clear()
         alarmHelper.stopAlert()
         locationHelper.stopTracking()
         crashDetector.stopListening()
@@ -594,8 +503,6 @@ class HomeFragment : Fragment(), CalibrationDialog.CalibrationListener {
         handler.removeCallbacksAndMessages(null)
         cameraExecutor.shutdown()
         faceLandmarker?.close()
-        baselineRecorder?.close()
-        baselineRecorder = null
         alarmHelper.release()
         locationHelper.stopTracking()
         crashDetector.stopListening()

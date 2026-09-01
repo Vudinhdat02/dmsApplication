@@ -26,11 +26,11 @@ class LocationHelper(
     private var isTracking = false
     private val speedHistory = ArrayDeque<Float>(SPEED_HISTORY_SIZE)
     private companion object {
-        const val MAX_ACCEPTED_ACCURACY_METERS = 50f
-        const val MAX_ACCEPTED_SPEED_ACCURACY_MPS = 2.5f
-        const val MIN_MOVING_SPEED_KMH = 3f
-        const val DRIVING_SPEED_KMH = 5f
-        const val MAX_LOW_SPEED_SPIKE_KMH = 50f
+        const val MAX_ACCEPTED_ACCURACY_METERS = 25f
+        const val MAX_ACCEPTED_SPEED_ACCURACY_MPS = 2.0f
+        const val STATIONARY_DEADBAND_KMH = 7f
+        const val DRIVING_SPEED_KMH = 20f
+        const val MAX_LOW_SPEED_SPIKE_KMH = 25f
         const val SPEED_HISTORY_SIZE = 5
     }
     private val locationCallback = object : LocationCallback() {
@@ -38,13 +38,14 @@ class LocationHelper(
             result.lastLocation?.let { location ->
                 currentLocation = location
                 if (location.hasAccuracy() && location.accuracy > MAX_ACCEPTED_ACCURACY_METERS) {
-                    onSpeedUpdate(speedHistory.averageOrZero(), "Trạng thái: GPS chưa ổn định")
+                    speedHistory.clear()
+                    onSpeedUpdate(0f, "Trạng thái: GPS chưa ổn định")
                     return@let
                 }
                 var speedKmh = calculateSpeedKmh(location)
                 val lastSpeed = speedHistory.lastOrNull() ?: 0f
                 if (speedKmh - lastSpeed > MAX_LOW_SPEED_SPIKE_KMH && lastSpeed < 10f) { speedKmh = lastSpeed }
-                if (speedKmh < MIN_MOVING_SPEED_KMH) speedKmh = 0f
+                if (speedKmh < stationaryThresholdKmh(location)) speedKmh = 0f
                 if (speedHistory.size >= SPEED_HISTORY_SIZE) speedHistory.removeFirst()
                 speedHistory.addLast(speedKmh)
                 val smoothedSpeed = speedHistory.average().toFloat()
@@ -56,6 +57,14 @@ class LocationHelper(
                 onSpeedUpdate(smoothedSpeed, status)
             }
         }
+    }
+    private fun stationaryThresholdKmh(location: Location): Float {
+        val uncertaintyKmh = if (location.hasSpeedAccuracy()) {
+            location.speedAccuracyMetersPerSecond * 3.6f * 2f
+        } else {
+            0f
+        }
+        return maxOf(STATIONARY_DEADBAND_KMH, uncertaintyKmh)
     }
     private fun calculateSpeedKmh(location: Location): Float {
         val hasReliableGpsSpeed = location.hasSpeed() &&

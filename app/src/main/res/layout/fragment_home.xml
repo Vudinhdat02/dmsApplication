@@ -213,121 +213,6 @@
 
     </LinearLayout>
 
-    <androidx.cardview.widget.CardView
-        android:id="@+id/baselineComparisonCard"
-        android:layout_width="0dp"
-        android:layout_height="215dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="12dp"
-        android:layout_marginEnd="16dp"
-        android:visibility="gone"
-        app:cardBackgroundColor="@color/surface"
-        app:cardCornerRadius="14dp"
-        app:cardElevation="2dp"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/cameraBorder">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:orientation="vertical"
-            android:paddingStart="12dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="12dp"
-            android:paddingBottom="8dp">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="So sánh theo tác vụ · ngưỡng = 1"
-                android:textColor="@color/text_primary"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <com.google.android.material.button.MaterialButtonToggleGroup
-                android:id="@+id/comparisonModeGroup"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="5dp"
-                app:checkedButton="@id/btnComparisonEye"
-                app:selectionRequired="true"
-                app:singleSelection="true">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnComparisonEye"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:text="Mắt"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnComparisonMouth"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:text="Miệng"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnComparisonHead"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:minHeight="0dp"
-                    android:text="Đầu"
-                    android:textAllCaps="false"
-                    android:textSize="12sp" />
-
-            </com.google.android.material.button.MaterialButtonToggleGroup>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="3dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/tvComparisonPrimaryLegend"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="● EAR 3D"
-                    android:textColor="@color/brand_primary"
-                    android:textSize="11sp" />
-
-                <TextView
-                    android:id="@+id/tvComparisonBaselineLegend"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="● EAR 2D"
-                    android:textColor="@color/warning"
-                    android:textSize="11sp" />
-
-            </LinearLayout>
-
-            <com.example.dmsapplication.ui.homeView.helper.BaselineComparisonChartView
-                android:id="@+id/baselineComparisonChart"
-                android:layout_width="match_parent"
-                android:layout_height="0dp"
-                android:layout_marginTop="4dp"
-                android:layout_weight="1"
-                android:paddingTop="4dp"
-                android:paddingBottom="2dp" />
-
-        </LinearLayout>
-
-    </androidx.cardview.widget.CardView>
     <androidx.core.widget.NestedScrollView
         android:id="@+id/settingsScrollView"
         android:layout_width="0dp"
@@ -338,7 +223,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/baselineComparisonCard">
+        app:layout_constraintTop_toBottomOf="@id/cameraBorder">
 
 
         <LinearLayout
@@ -549,50 +434,6 @@
                     android:layout_height="wrap_content"
                     android:layout_alignParentStart="true"
                     android:layout_centerVertical="true"
-                    android:layout_toStartOf="@id/switchComparisonMode"
-                    android:gravity="center_vertical"
-                    android:paddingEnd="12dp">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@android:drawable/ic_menu_sort_by_size"
-                        app:tint="@color/brand_primary" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="12dp"
-                        android:text="Chế độ so sánh mô hình"
-                        android:textSize="16sp" />
-
-                </LinearLayout>
-
-                <androidx.appcompat.widget.SwitchCompat
-                    android:id="@+id/switchComparisonMode"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:layout_centerVertical="true"
-                    android:checked="false" />
-
-            </RelativeLayout>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:layout_marginStart="36dp"
-                android:background="@color/divider" />
-            <RelativeLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:paddingVertical="10dp">
-
-                <LinearLayout
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentStart="true"
-                    android:layout_centerVertical="true"
                     android:layout_toStartOf="@id/switchGpsHome"
                     android:gravity="center_vertical"
                     android:paddingEnd="12dp">
@@ -746,6 +587,13 @@
                     android:progress="6"
                     android:progressTint="@color/brand_primary"
                     android:thumbTint="@color/brand_primary" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Ngưỡng này dùng để cá nhân hóa cảnh báo trong app. Phân tích nghiên cứu chọn ngưỡng độc lập từ tập huấn luyện."
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
 
             </LinearLayout>
 

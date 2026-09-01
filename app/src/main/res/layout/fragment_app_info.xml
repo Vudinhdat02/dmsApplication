@@ -95,10 +95,17 @@
                         android:layout_height="wrap_content"
                         android:text="Hệ thống giám sát trạng thái lái xe DMS (Driver Monitoring System) là ứng dụng giám sát tình trạng buồn ngủ của tài xế trong khi lái xe, giúp cảnh báo kịp thời để đảm bảo an toàn giao thông.
                         \n
-                        \nPhiên bản: V1.0.0
                         \nNăm phát hành: 06/2026"
                         android:textColor="@color/text_secondary"
                         android:lineSpacingMultiplier="1.5" />
+
+                    <TextView
+                        android:id="@+id/tvVersion"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:textColor="@color/text_secondary"
+                        android:textStyle="bold" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 

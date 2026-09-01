@@ -32,6 +32,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val drowsyCount = _drowsyCount.asStateFlow()
     private val _isHeadDistracted = MutableStateFlow(false)
     val isHeadDistracted = _isHeadDistracted.asStateFlow()
+    private val _isFaceNotVisible = MutableStateFlow(false)
+    val isFaceNotVisible = _isFaceNotVisible.asStateFlow()
     private val _headDistractedCount = MutableStateFlow(0)
     val headDistractedCount = _headDistractedCount.asStateFlow()
     private val _isYawning = MutableStateFlow(false)
@@ -63,12 +65,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val alertRepository = AlertRepository()
     private val _isCameraPreviewEnabled = MutableStateFlow(true)
     val isCameraPreviewEnabled = _isCameraPreviewEnabled.asStateFlow()
-    private val _isComparisonModeEnabled = MutableStateFlow(false)
-    val isComparisonModeEnabled = _isComparisonModeEnabled.asStateFlow()
     private var isHomeScreenActive = false
     private companion object {
-        const val START_MONITORING_SPEED_KMH = 5f
-        const val STOP_MONITORING_SPEED_KMH = 3f
+        const val START_MONITORING_SPEED_KMH = 20f
     }
     init {
         loadInitialStats()
@@ -96,13 +95,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _isCameraPreviewEnabled.value = enabled
     }
 
-    fun setComparisonModeEnabled(enabled: Boolean) {
-        _isComparisonModeEnabled.value = enabled
-    }
-    fun onDmsResult(isDrowsy: Boolean, isHeadDistracted: Boolean, isYawning: Boolean) {
+    fun onDmsResult(
+        isDrowsy: Boolean,
+        isHeadDistracted: Boolean,
+        isFaceNotVisible: Boolean,
+        isYawning: Boolean
+    ) {
         if (!isHomeScreenActive || !_isMonitoringEnabled.value) {
             if (_isDrowsy.value) _isDrowsy.value = false
             if (_isHeadDistracted.value) _isHeadDistracted.value = false
+            if (_isFaceNotVisible.value) _isFaceNotVisible.value = false
             if (_isYawning.value) _isYawning.value = false
             return
         }
@@ -116,6 +118,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             _isHeadDistracted.value = isHeadDistracted
             if (isHeadDistracted) _headDistractedCount.value += 1
         }
+        _isFaceNotVisible.value = isFaceNotVisible
         val wasYawning = _isYawning.value
         if (isYawning != wasYawning) {
             _isYawning.value = isYawning
@@ -133,16 +136,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (!isHomeScreenActive) return
         updateSpeed(speed)
         if (_isGpsEnabled.value) {
-            val shouldMonitor = if (_isMonitoringEnabled.value) {
-                speed >= STOP_MONITORING_SPEED_KMH
-            } else {
-                speed >= START_MONITORING_SPEED_KMH
-            }
+            val shouldMonitor = speed > START_MONITORING_SPEED_KMH
             if (_isMonitoringEnabled.value != shouldMonitor) {
                 _isMonitoringEnabled.value = shouldMonitor
                 if (!shouldMonitor) {
                     _isDrowsy.value = false
                     _isHeadDistracted.value = false
+                    _isFaceNotVisible.value = false
                     _isYawning.value = false
                 }
             }
@@ -201,6 +201,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         isHomeScreenActive = active
         _isDrowsy.value = false
         _isHeadDistracted.value = false
+        _isFaceNotVisible.value = false
         _isYawning.value = false
         if (active) {
             if (_isGpsEnabled.value) {
@@ -208,7 +209,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _locationStatus.value = "Tr\u1EA1ng th\u00E1i: \u0110ang ch\u1EDD GPS..."
             } else {
                 _isMonitoringEnabled.value = true
-                _locationStatus.value = "Gi\u00E1m s\u00E1t kh\u00F4ng c\u1EA7n GPS"
+                _locationStatus.value = "Giám sát không cần GPS"
             }
         } else {
             _isMonitoringEnabled.value = false
@@ -221,6 +222,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _yawnCount.value           = 0
         _isDrowsy.value            = false
         _isHeadDistracted.value    = false
+        _isFaceNotVisible.value    = false
         _isYawning.value           = false
     }
     fun saveViolationRecord(bitmap: Bitmap) {

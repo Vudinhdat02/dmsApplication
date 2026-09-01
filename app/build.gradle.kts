@@ -33,8 +33,8 @@ android {
         applicationId = "com.example.dmsapplication"
         minSdk = 26
         targetSdk = 35
-        versionCode = 4
-        versionName = "1.1.1"
+        versionCode = 9
+        versionName = "1.1.6"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -140,7 +140,6 @@ dependencies {
     implementation("androidx.camera:camera-lifecycle:${camerax_version}")
     implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
-    implementation("org.opencv:opencv:4.12.0")
 
     // ROOM DATABASE
     kapt("androidx.room:room-compiler:2.7.2")

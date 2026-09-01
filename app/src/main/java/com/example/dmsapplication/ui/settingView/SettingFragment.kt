@@ -17,6 +17,7 @@ import com.example.dmsapplication.ui.settingView.info.AppInfoFragment
 import com.example.dmsapplication.ui.settingView.contact.ContactSettingsFragment
 import com.example.dmsapplication.ui.settingView.password.ChangePasswordFragment
 import com.example.dmsapplication.ui.settingView.profile.ProfileFragment
+import com.example.dmsapplication.ui.settingView.terms.TermsOfServiceFragment
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 class SettingFragment : Fragment() {
     private var _binding: FragmentSettingBinding? = null
@@ -43,6 +44,9 @@ class SettingFragment : Fragment() {
         }
         binding.btnInfoApp.setOnClickListener {
             navigateTo(AppInfoFragment())
+        }
+        binding.btnPrivacyPolicy.setOnClickListener {
+            navigateTo(TermsOfServiceFragment())
         }
         binding.btnSendAlert.setOnClickListener {
             navigateTo(ContactSettingsFragment())

@@ -10,9 +10,14 @@ import kotlin.math.sqrt
  * Sử dụng khoảng cách 3D (X, Y, Z) để tránh sai số khi tài xế hơi quay đầu.
  */
 object MarCalculator {
-    private fun distance2D(p1: NormalizedLandmark, p2: NormalizedLandmark): Float {
-        val dx = p1.x() - p2.x()
-        val dy = p1.y() - p2.y()
+    private fun distance2D(
+        p1: NormalizedLandmark,
+        p2: NormalizedLandmark,
+        imageWidth: Int,
+        imageHeight: Int
+    ): Float {
+        val dx = (p1.x() - p2.x()) * imageWidth
+        val dy = (p1.y() - p2.y()) * imageHeight
         return sqrt(dx * dx + dy * dy)
     }
 
@@ -39,10 +44,12 @@ object MarCalculator {
         topInner: NormalizedLandmark,
         bottomInner: NormalizedLandmark,
         leftInner: NormalizedLandmark,
-        rightInner: NormalizedLandmark
+        rightInner: NormalizedLandmark,
+        imageWidth: Int,
+        imageHeight: Int
     ): Float {
-        val height = distance2D(topInner, bottomInner)
-        val width = distance2D(leftInner, rightInner)
+        val height = distance2D(topInner, bottomInner, imageWidth, imageHeight)
+        val width = distance2D(leftInner, rightInner, imageWidth, imageHeight)
         if (width == 0f) return 0f
         return height / width
     }
