@@ -99,8 +99,6 @@ dmsApplication/
 - [Dependencies and bundling](DEPENDENCIES.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Model card](docs/MODEL_CARD.md)
-- [Contribution guidelines](CONTRIBUTING.md)
-- [Changelog](CHANGELOG.md)
 
 ## Security and Privacy
 
