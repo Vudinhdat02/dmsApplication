@@ -1,23 +1,23 @@
 *.iml
 .gradle
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+/.idea/
+/.kotlin/
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
 local.properties
-/server/.env
-/server/.venv/
-/server/__pycache__/
-/server/*.log
-/server/server.pid
+
+# Local/generated working files
+/app/release/
+/draw_pipeline_matplotlib.py
+/output/
+/project_structure.txt
+/server/
+/tmp/
+/tools/
 
 # ASP.NET Core backend
 /DMSServer/**/.vs/
@@ -34,6 +34,7 @@ local.properties
 /DMSServer/**/*.pfx
 /DMSServer/**/*.key
 /DMSServer/**/*.pem
+/DMSServer/**/*.csproj.user
 
 # Android release signing (never commit private signing material)
 /keystore.properties

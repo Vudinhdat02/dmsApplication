@@ -11,7 +11,6 @@
     <color name="text_secondary">#CBD5E1</color>
     <color name="text_muted">#AAB7C4</color>
     <color name="text_disabled">#78909C</color>
-    <color name="input_background">#202A31</color>
     <color name="input_stroke">#607D8B</color>
     <color name="divider">#37474F</color>
     <color name="icon_secondary">#B0BEC5</color>
